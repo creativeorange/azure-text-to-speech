@@ -1,0 +1,21 @@
+{
+  "name": "@creativeorange/azure-text-to-speech",
+  "version": "1.0.0",
+  "main": "dist/co-azure-tts.umd.js",
+  "browser": "dist/co-azure-tts.es.js",
+  "scripts": {
+    "serve-vite": "vite",
+    "build-vite": "vite build --watch",
+    "preview-vite": "vite preview"
+  },
+  "license": "MIT",
+  "author": "Edsardio",
+  "devDependencies": {
+    "build-esm": "^4.2.2",
+    "microsoft-cognitiveservices-speech-sdk": "^1.22.0",
+    "typescript": "^4.7.4",
+    "vite-plugin-env-compatible": "^1.1.1",
+    "vite": "^2.7.2",
+    "@originjs/vite-plugin-commonjs": "^1.0.1"
+  }
+}
