@@ -18,6 +18,8 @@ export default class TextToSpeech {
     player: any;
     synthesizer: any;
 
+    previousWordBoundary: any;
+
 
     constructor(key: string, region: string, voice: string = 'male') {
         this.key = key;
@@ -29,7 +31,7 @@ export default class TextToSpeech {
         setInterval(() => {
           if (this.player !== undefined && this.highlightDiv) {
             const currentTime = this.player.currentTime;
-            var wordBoundary;
+            let wordBoundary;
             for (const e of this.wordBoundryList) {
               if (currentTime * 1000 > e.audioOffset / 10000) {
                 wordBoundary = e;
@@ -37,8 +39,13 @@ export default class TextToSpeech {
                 break;
               }
             }
+            if (~['.', ',', '!', '?'].indexOf(wordBoundary.text)) {
+                wordBoundary = this.previousWordBoundary ?? undefined;
+            }
+
             if (wordBoundary !== undefined) {
-              this.highlightDiv.innerHTML = this.textToRead.substr(0, wordBoundary.textOffset) +
+                this.previousWordBoundary = wordBoundary;
+                this.highlightDiv.innerHTML = this.textToRead.substr(0, wordBoundary.textOffset) +
                       "<span class='co-tts-highlight'>" + wordBoundary.text + "</span>" +
                       this.textToRead.substr(wordBoundary.textOffset + wordBoundary.wordLength);
             } else {
@@ -72,6 +79,10 @@ export default class TextToSpeech {
                     await this.handleDefault(currentNode, currentNode.attributes.getNamedItem('co-tts'));
                 } else if (currentNode.attributes.getNamedItem('co-tts.stop')) {
                     await this.handleStopModifier(currentNode, currentNode.attributes.getNamedItem('co-tts.stop'));
+                } else if (currentNode.attributes.getNamedItem('co-tts.resume')) {
+                    await this.handleResumeModifier(currentNode, currentNode.attributes.getNamedItem('co-tts.resume'));
+                } else if (currentNode.attributes.getNamedItem('co-tts.pause')) {
+                    await this.handlePauseModifier(currentNode, currentNode.attributes.getNamedItem('co-tts.pause'));
                 }
             }
 
@@ -139,6 +150,18 @@ export default class TextToSpeech {
     async handleStopModifier(node: any, attr: Attr) {
         node.addEventListener('click', async (_: any) => {
             await this.stopPlayer();
+        });
+    }
+
+    async handlePauseModifier(node: any, attr: Attr) {
+        node.addEventListener('click', async (_: any) => {
+            await this.player.pause();
+        });
+    }
+
+    async handleResumeModifier(node: any, attr: Attr) {
+        node.addEventListener('click', async (_: any) => {
+            await this.player.resume();
         });
     }
 

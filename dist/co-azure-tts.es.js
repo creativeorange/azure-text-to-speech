@@ -5854,15 +5854,17 @@ class TextToSpeech {
     __publicField(this, "audioConfig");
     __publicField(this, "player");
     __publicField(this, "synthesizer");
+    __publicField(this, "previousWordBoundary");
     this.key = key;
     this.region = region;
     this.voice = voice;
   }
   async start() {
     setInterval(() => {
+      var _a;
       if (this.player !== void 0 && this.highlightDiv) {
         const currentTime = this.player.currentTime;
-        var wordBoundary;
+        let wordBoundary;
         for (const e of this.wordBoundryList) {
           if (currentTime * 1e3 > e.audioOffset / 1e4) {
             wordBoundary = e;
@@ -5870,7 +5872,11 @@ class TextToSpeech {
             break;
           }
         }
+        if (~[".", ",", "!", "?"].indexOf(wordBoundary.text)) {
+          wordBoundary = (_a = this.previousWordBoundary) != null ? _a : void 0;
+        }
         if (wordBoundary !== void 0) {
+          this.previousWordBoundary = wordBoundary;
           this.highlightDiv.innerHTML = this.textToRead.substr(0, wordBoundary.textOffset) + "<span class='co-tts-highlight'>" + wordBoundary.text + "</span>" + this.textToRead.substr(wordBoundary.textOffset + wordBoundary.wordLength);
         } else {
           this.highlightDiv.innerHTML = this.textToRead;
@@ -5897,6 +5903,10 @@ class TextToSpeech {
           await this.handleDefault(currentNode, currentNode.attributes.getNamedItem("co-tts"));
         } else if (currentNode.attributes.getNamedItem("co-tts.stop")) {
           await this.handleStopModifier(currentNode, currentNode.attributes.getNamedItem("co-tts.stop"));
+        } else if (currentNode.attributes.getNamedItem("co-tts.resume")) {
+          await this.handleResumeModifier(currentNode, currentNode.attributes.getNamedItem("co-tts.resume"));
+        } else if (currentNode.attributes.getNamedItem("co-tts.pause")) {
+          await this.handlePauseModifier(currentNode, currentNode.attributes.getNamedItem("co-tts.pause"));
         }
       }
       if (currentNode.childNodes.length > 0) {
@@ -5953,6 +5963,16 @@ class TextToSpeech {
   async handleStopModifier(node, attr) {
     node.addEventListener("click", async (_) => {
       await this.stopPlayer();
+    });
+  }
+  async handlePauseModifier(node, attr) {
+    node.addEventListener("click", async (_) => {
+      await this.player.pause();
+    });
+  }
+  async handleResumeModifier(node, attr) {
+    node.addEventListener("click", async (_) => {
+      await this.player.resume();
     });
   }
   async stopPlayer() {
