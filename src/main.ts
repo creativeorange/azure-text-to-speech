@@ -1,7 +1,6 @@
-import { SpeakerAudioDestination, AudioConfig, OutputFormat, Recognizer, SpeechConfig, SpeechRecognizer, SpeechSynthesizer } from 'microsoft-cognitiveservices-speech-sdk';
+import {SpeakerAudioDestination, AudioConfig, SpeechConfig, SpeechSynthesizer} from 'microsoft-cognitiveservices-speech-sdk';
 
 export default class TextToSpeech {
-
     key: string;
     region: string;
     voice: string;
@@ -21,7 +20,7 @@ export default class TextToSpeech {
     previousWordBoundary: any;
 
 
-    constructor(key: string, region: string, voice: string = 'male') {
+    constructor(key: string, region: string, voice: string) {
         this.key = key;
         this.region = region;
         this.voice = voice;
@@ -29,46 +28,47 @@ export default class TextToSpeech {
 
     async start() {
         setInterval(() => {
-          if (this.player !== undefined && this.highlightDiv) {
-            const currentTime = this.player.currentTime;
-            let wordBoundary;
-            for (const e of this.wordBoundryList) {
-              if (currentTime * 1000 > e.audioOffset / 10000) {
-                wordBoundary = e;
-              } else {
-                break;
-              }
-            }
-            if (~['.', ',', '!', '?'].indexOf(wordBoundary.text)) {
-                wordBoundary = this.previousWordBoundary ?? undefined;
-            }
+            if (this.player !== undefined && this.highlightDiv) {
+                const currentTime = this.player.currentTime;
+                let wordBoundary;
+                for (const e of this.wordBoundryList) {
+                    if (currentTime * 1000 > e.audioOffset / 10000) {
+                        wordBoundary = e;
+                    } else {
+                        break;
+                    }
+                }
 
-            if (wordBoundary !== undefined) {
-                this.previousWordBoundary = wordBoundary;
-                this.highlightDiv.innerHTML = this.textToRead.substr(0, wordBoundary.textOffset) +
-                      "<span class='co-tts-highlight'>" + wordBoundary.text + "</span>" +
-                      this.textToRead.substr(wordBoundary.textOffset + wordBoundary.wordLength);
-            } else {
-                this.highlightDiv.innerHTML = this.textToRead;
+                if (wordBoundary !== undefined) {
+                    if (~['.', ',', '!', '?'].indexOf(wordBoundary.text)) {
+                        wordBoundary = this.previousWordBoundary ?? undefined;
+                    }
+
+                    this.previousWordBoundary = wordBoundary;
+                    this.highlightDiv.innerHTML = this.textToRead.substring(0, wordBoundary.textOffset) +
+                      '<span class=\'co-tts-highlight\'>' + wordBoundary.text + '</span>' +
+                      this.textToRead.substring(wordBoundary.textOffset + wordBoundary.wordLength);
+                } else {
+                    this.highlightDiv.innerHTML = this.textToRead;
+                }
             }
-          }
         }, 50);
 
         await this.registerBindings(document);
     }
 
     async synthesis() {
-        
+
     }
 
     async registerBindings(node: any) {
-        let nodes = node.childNodes;
+        const nodes = node.childNodes;
         for (let i = 0; i < nodes.length; i++) {
             if (!nodes[i]) {
                 continue;
             }
 
-            let currentNode = nodes[i];
+            const currentNode = nodes[i];
 
             if (currentNode.attributes) {
                 if (currentNode.attributes.getNamedItem('co-tts.id')) {
@@ -96,7 +96,7 @@ export default class TextToSpeech {
         node.addEventListener('click', async (_: any) => {
             this.stopPlayer();
             this.clickedNode = node;
-            let referenceDiv = document.getElementById(attr.value);
+            const referenceDiv = document.getElementById(attr.value);
 
             if (!referenceDiv) {
                 return;
@@ -105,7 +105,7 @@ export default class TextToSpeech {
             if (referenceDiv.hasAttribute('co-tts.text') && referenceDiv.getAttribute('co-tts.text') !== '') {
                 this.textToRead = referenceDiv.getAttribute('co-tts.text') ?? '';
             } else {
-                this.textToRead = referenceDiv.innerText;
+                this.textToRead = referenceDiv.innerHTML;
             }
 
             if (referenceDiv.hasAttribute('co-tts.highlight')) {
@@ -120,14 +120,14 @@ export default class TextToSpeech {
         node.addEventListener('click', async (_: any) => {
             this.stopPlayer();
             this.clickedNode = node;
-            let response = await fetch(attr.value, {
+            const response = await fetch(attr.value, {
                 method: `GET`,
             });
 
             this.textToRead = await response.text();
 
             this.startSynthesizer(node, attr);
-        })
+        });
     }
 
     async handleDefault(node: any, attr: Attr) {
@@ -137,8 +137,8 @@ export default class TextToSpeech {
             if (node.hasAttribute('co-tts.highlight')) {
                 this.highlightDiv = node;
             }
-            if (attr.value === "") {
-                this.textToRead = node.innerText;
+            if (attr.value === '') {
+                this.textToRead = node.innerHTML;
             } else {
                 this.textToRead = attr.value;
             }
@@ -169,7 +169,7 @@ export default class TextToSpeech {
         if (this.highlightDiv !== undefined) {
             this.highlightDiv.innerHTML = this.textToRead;
         }
-        
+
         this.textToRead = '';
         this.wordBoundryList = [];
         if (this.player !== undefined) {
@@ -179,14 +179,10 @@ export default class TextToSpeech {
         this.highlightDiv = undefined;
     }
 
-    async startSynthesizer (node: any, attr: Attr) {
+    async startSynthesizer(node: any, attr: Attr) {
         this.speechConfig = SpeechConfig.fromSubscription(this.key, this.region);
 
-        if (this.voice === 'female') {
-            this.speechConfig.speechSynthesisVoiceName = 'Microsoft Server Speech Text to Speech Voice (nl-NL, ColetteNeural)';
-        } else {
-            this.speechConfig.speechSynthesisVoiceName = 'Microsoft Server Speech Text to Speech Voice (nl-NL, MaartenNeural)';
-        }
+        this.speechConfig.speechSynthesisVoiceName = `Microsoft Server Speech Text to Speech Voice (${this.voice})`;
         this.speechConfig.speechSynthesisOutputFormat = 8;
 
         this.player = new SpeakerAudioDestination();
@@ -200,15 +196,15 @@ export default class TextToSpeech {
 
         this.player.onAudioEnd = () => {
             this.stopPlayer();
-            
+
             if (this.clickedNode.hasAttribute('co-tts.next')) {
-                let nextNode = document.getElementById(this.clickedNode.getAttribute('co-tts.next'));
+                const nextNode = document.getElementById(this.clickedNode.getAttribute('co-tts.next'));
                 if (nextNode) {
                     nextNode.dispatchEvent(new Event('click'));
                 }
             }
         };
-        
+
         this.synthesizer.speakTextAsync(this.textToRead,
             () => {
                 this.synthesizer.close();
@@ -219,5 +215,4 @@ export default class TextToSpeech {
                 this.synthesizer = undefined;
             });
     }
-
 }

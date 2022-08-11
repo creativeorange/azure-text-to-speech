@@ -4,18 +4,20 @@
   "main": "dist/co-azure-tts.umd.js",
   "browser": "dist/co-azure-tts.es.js",
   "scripts": {
-    "serve-vite": "vite",
-    "build-vite": "vite build --watch",
-    "preview-vite": "vite preview"
+    "build": "vite build --watch"
   },
   "license": "MIT",
   "author": "Edsardio",
   "devDependencies": {
+    "@originjs/vite-plugin-commonjs": "^1.0.1",
+    "@typescript-eslint/eslint-plugin": "^5.33.0",
     "build-esm": "^4.2.2",
+    "eslint": "^8.21.0",
+    "eslint-config-google": "^0.14.0",
     "microsoft-cognitiveservices-speech-sdk": "^1.22.0",
     "typescript": "^4.7.4",
-    "vite-plugin-env-compatible": "^1.1.1",
     "vite": "^2.7.2",
-    "@originjs/vite-plugin-commonjs": "^1.0.1"
+    "vite-plugin-env-compatible": "^1.1.1",
+    "vite-plugin-eslint": "^1.7.0"
   }
 }

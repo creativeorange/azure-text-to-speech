@@ -5842,7 +5842,7 @@ class RestMessageAdapter {
   }
 }
 class TextToSpeech {
-  constructor(key, region, voice = "male") {
+  constructor(key, region, voice) {
     __publicField(this, "key");
     __publicField(this, "region");
     __publicField(this, "voice");
@@ -5872,12 +5872,12 @@ class TextToSpeech {
             break;
           }
         }
-        if (~[".", ",", "!", "?"].indexOf(wordBoundary.text)) {
-          wordBoundary = (_a = this.previousWordBoundary) != null ? _a : void 0;
-        }
         if (wordBoundary !== void 0) {
+          if (~[".", ",", "!", "?"].indexOf(wordBoundary.text)) {
+            wordBoundary = (_a = this.previousWordBoundary) != null ? _a : void 0;
+          }
           this.previousWordBoundary = wordBoundary;
-          this.highlightDiv.innerHTML = this.textToRead.substr(0, wordBoundary.textOffset) + "<span class='co-tts-highlight'>" + wordBoundary.text + "</span>" + this.textToRead.substr(wordBoundary.textOffset + wordBoundary.wordLength);
+          this.highlightDiv.innerHTML = this.textToRead.substring(0, wordBoundary.textOffset) + "<span class='co-tts-highlight'>" + wordBoundary.text + "</span>" + this.textToRead.substring(wordBoundary.textOffset + wordBoundary.wordLength);
         } else {
           this.highlightDiv.innerHTML = this.textToRead;
         }
@@ -5888,12 +5888,12 @@ class TextToSpeech {
   async synthesis() {
   }
   async registerBindings(node) {
-    let nodes = node.childNodes;
+    const nodes = node.childNodes;
     for (let i = 0; i < nodes.length; i++) {
       if (!nodes[i]) {
         continue;
       }
-      let currentNode = nodes[i];
+      const currentNode = nodes[i];
       if (currentNode.attributes) {
         if (currentNode.attributes.getNamedItem("co-tts.id")) {
           await this.handleIdModifier(currentNode, currentNode.attributes.getNamedItem("co-tts.id"));
@@ -5919,14 +5919,14 @@ class TextToSpeech {
       var _a;
       this.stopPlayer();
       this.clickedNode = node;
-      let referenceDiv = document.getElementById(attr.value);
+      const referenceDiv = document.getElementById(attr.value);
       if (!referenceDiv) {
         return;
       }
       if (referenceDiv.hasAttribute("co-tts.text") && referenceDiv.getAttribute("co-tts.text") !== "") {
         this.textToRead = (_a = referenceDiv.getAttribute("co-tts.text")) != null ? _a : "";
       } else {
-        this.textToRead = referenceDiv.innerText;
+        this.textToRead = referenceDiv.innerHTML;
       }
       if (referenceDiv.hasAttribute("co-tts.highlight")) {
         this.highlightDiv = referenceDiv;
@@ -5938,7 +5938,7 @@ class TextToSpeech {
     node.addEventListener("click", async (_) => {
       this.stopPlayer();
       this.clickedNode = node;
-      let response = await fetch(attr.value, {
+      const response = await fetch(attr.value, {
         method: `GET`
       });
       this.textToRead = await response.text();
@@ -5953,7 +5953,7 @@ class TextToSpeech {
         this.highlightDiv = node;
       }
       if (attr.value === "") {
-        this.textToRead = node.innerText;
+        this.textToRead = node.innerHTML;
       } else {
         this.textToRead = attr.value;
       }
@@ -5989,11 +5989,7 @@ class TextToSpeech {
   }
   async startSynthesizer(node, attr) {
     this.speechConfig = SpeechConfig.fromSubscription(this.key, this.region);
-    if (this.voice === "female") {
-      this.speechConfig.speechSynthesisVoiceName = "Microsoft Server Speech Text to Speech Voice (nl-NL, ColetteNeural)";
-    } else {
-      this.speechConfig.speechSynthesisVoiceName = "Microsoft Server Speech Text to Speech Voice (nl-NL, MaartenNeural)";
-    }
+    this.speechConfig.speechSynthesisVoiceName = `Microsoft Server Speech Text to Speech Voice (${this.voice})`;
     this.speechConfig.speechSynthesisOutputFormat = 8;
     this.player = new SpeakerAudioDestination();
     this.audioConfig = AudioConfig.fromSpeakerOutput(this.player);
@@ -6004,7 +6000,7 @@ class TextToSpeech {
     this.player.onAudioEnd = () => {
       this.stopPlayer();
       if (this.clickedNode.hasAttribute("co-tts.next")) {
-        let nextNode = document.getElementById(this.clickedNode.getAttribute("co-tts.next"));
+        const nextNode = document.getElementById(this.clickedNode.getAttribute("co-tts.next"));
         if (nextNode) {
           nextNode.dispatchEvent(new Event("click"));
         }
