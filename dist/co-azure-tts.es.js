@@ -6062,7 +6062,6 @@ class TextToSpeech {
             }
             if (this.currentWord !== wordBoundary.text) {
               this.wordEncounters[wordBoundary.text]++;
-              console.log(this.wordEncounters);
               this.currentOffset = this.getPosition(
                 this.originalHighlightDivInnerHTML,
                 wordBoundary.text,
@@ -6081,7 +6080,6 @@ class TextToSpeech {
   }
   getPosition(string, subString, index) {
     const regex = new RegExp(`\\b${subString}\\b`, "g");
-    console.log(string.split(regex, index).join(subString), regex, index);
     return string.split(regex, index).join(subString).length;
   }
 }

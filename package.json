@@ -1,6 +1,6 @@
 {
   "name": "@creativeorange/azure-text-to-speech",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "main": "dist/co-azure-tts.umd.js",
   "browser": "dist/co-azure-tts.es.js",
   "scripts": {
