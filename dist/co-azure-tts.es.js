@@ -5855,37 +5855,17 @@ class TextToSpeech {
     __publicField(this, "player");
     __publicField(this, "synthesizer");
     __publicField(this, "previousWordBoundary");
+    __publicField(this, "interval");
+    __publicField(this, "wordEncounters", []);
+    __publicField(this, "originalHighlightDivInnerHTML", "");
+    __publicField(this, "currentWord", "");
+    __publicField(this, "currentOffset", 0);
     this.key = key;
     this.region = region;
     this.voice = voice;
   }
   async start() {
-    setInterval(() => {
-      var _a;
-      if (this.player !== void 0 && this.highlightDiv) {
-        const currentTime = this.player.currentTime;
-        let wordBoundary;
-        for (const e of this.wordBoundryList) {
-          if (currentTime * 1e3 > e.audioOffset / 1e4) {
-            wordBoundary = e;
-          } else {
-            break;
-          }
-        }
-        if (wordBoundary !== void 0) {
-          if (~[".", ",", "!", "?"].indexOf(wordBoundary.text)) {
-            wordBoundary = (_a = this.previousWordBoundary) != null ? _a : void 0;
-          }
-          this.previousWordBoundary = wordBoundary;
-          this.highlightDiv.innerHTML = this.textToRead.substring(0, wordBoundary.textOffset) + "<span class='co-tts-highlight'>" + wordBoundary.text + "</span>" + this.textToRead.substring(wordBoundary.textOffset + wordBoundary.wordLength);
-        } else {
-          this.highlightDiv.innerHTML = this.textToRead;
-        }
-      }
-    }, 50);
     await this.registerBindings(document);
-  }
-  async synthesis() {
   }
   async registerBindings(node) {
     const nodes = node.childNodes;
@@ -5918,6 +5898,7 @@ class TextToSpeech {
     node.addEventListener("click", async (_) => {
       var _a;
       this.stopPlayer();
+      await this.createInterval();
       this.clickedNode = node;
       const referenceDiv = document.getElementById(attr.value);
       if (!referenceDiv) {
@@ -5930,6 +5911,7 @@ class TextToSpeech {
       }
       if (referenceDiv.hasAttribute("co-tts.highlight")) {
         this.highlightDiv = referenceDiv;
+        this.originalHighlightDivInnerHTML = referenceDiv.innerHTML;
       }
       this.startSynthesizer(node, attr);
     });
@@ -5937,6 +5919,7 @@ class TextToSpeech {
   async handleAjaxModifier(node, attr) {
     node.addEventListener("click", async (_) => {
       this.stopPlayer();
+      await this.createInterval();
       this.clickedNode = node;
       const response = await fetch(attr.value, {
         method: `GET`
@@ -5948,9 +5931,11 @@ class TextToSpeech {
   async handleDefault(node, attr) {
     node.addEventListener("click", async (_) => {
       this.stopPlayer();
+      await this.createInterval();
       this.clickedNode = node;
       if (node.hasAttribute("co-tts.highlight")) {
         this.highlightDiv = node;
+        this.originalHighlightDivInnerHTML = node.innerHTML;
       }
       if (attr.value === "") {
         this.textToRead = node.innerHTML;
@@ -5960,27 +5945,51 @@ class TextToSpeech {
       this.startSynthesizer(node, attr);
     });
   }
+  async handleWithoutClick(node, attr) {
+    this.stopPlayer();
+    await this.createInterval();
+    this.clickedNode = node;
+    if (node.hasAttribute("co-tts.highlight")) {
+      this.highlightDiv = node;
+      this.originalHighlightDivInnerHTML = node.innerHTML;
+    }
+    if (attr.value === "") {
+      this.textToRead = node.innerHTML;
+    } else {
+      this.textToRead = attr.value;
+    }
+    this.startSynthesizer(node, attr);
+  }
   async handleStopModifier(node, attr) {
     node.addEventListener("click", async (_) => {
       await this.stopPlayer();
+      document.dispatchEvent(new CustomEvent("COAzureTTSStoppedPlaying", {}));
     });
   }
   async handlePauseModifier(node, attr) {
     node.addEventListener("click", async (_) => {
+      await this.clearInterval();
       await this.player.pause();
+      document.dispatchEvent(new CustomEvent("COAzureTTSPausedPlaying", {}));
     });
   }
   async handleResumeModifier(node, attr) {
     node.addEventListener("click", async (_) => {
+      await this.createInterval();
       await this.player.resume();
+      document.dispatchEvent(new CustomEvent("COAzureTTSResumedPlaying", {}));
     });
   }
   async stopPlayer() {
+    await this.clearInterval();
     if (this.highlightDiv !== void 0) {
-      this.highlightDiv.innerHTML = this.textToRead;
+      this.highlightDiv.innerHTML = this.originalHighlightDivInnerHTML;
     }
     this.textToRead = "";
+    this.currentWord = "";
+    this.originalHighlightDivInnerHTML = "";
     this.wordBoundryList = [];
+    this.wordEncounters = [];
     if (this.player !== void 0) {
       this.player.pause();
     }
@@ -5990,21 +5999,28 @@ class TextToSpeech {
   async startSynthesizer(node, attr) {
     this.speechConfig = SpeechConfig.fromSubscription(this.key, this.region);
     this.speechConfig.speechSynthesisVoiceName = `Microsoft Server Speech Text to Speech Voice (${this.voice})`;
-    this.speechConfig.speechSynthesisOutputFormat = 8;
+    this.speechConfig.speechSynthesisOutputFormat = SpeechSynthesisOutputFormat.Audio24Khz160KBitRateMonoMp3;
     this.player = new SpeakerAudioDestination();
     this.audioConfig = AudioConfig.fromSpeakerOutput(this.player);
     this.synthesizer = new SpeechSynthesizer(this.speechConfig, this.audioConfig);
     this.synthesizer.wordBoundary = (s, e) => {
       this.wordBoundryList.push(e);
     };
-    this.player.onAudioEnd = () => {
+    this.player.onAudioEnd = async () => {
       this.stopPlayer();
       if (this.clickedNode.hasAttribute("co-tts.next")) {
         const nextNode = document.getElementById(this.clickedNode.getAttribute("co-tts.next"));
-        if (nextNode) {
+        if (nextNode && nextNode.attributes.getNamedItem("co-tts.text")) {
+          this.handleWithoutClick(nextNode, nextNode.attributes.getNamedItem("co-tts.text"));
+        } else if (nextNode) {
           nextNode.dispatchEvent(new Event("click"));
         }
+      } else {
+        document.dispatchEvent(new CustomEvent("COAzureTTSFinishedPlaying", {}));
       }
+    };
+    this.player.onAudioStart = async () => {
+      document.dispatchEvent(new CustomEvent("COAzureTTSStartedPlaying", {}));
     };
     this.synthesizer.speakTextAsync(
       this.textToRead,
@@ -6017,6 +6033,56 @@ class TextToSpeech {
         this.synthesizer = void 0;
       }
     );
+  }
+  async clearInterval() {
+    clearInterval(this.interval);
+  }
+  async createInterval() {
+    this.interval = setInterval(() => {
+      var _a;
+      if (this.player !== void 0 && this.highlightDiv) {
+        const currentTime = this.player.currentTime;
+        let wordBoundary;
+        for (const e of this.wordBoundryList) {
+          if (currentTime * 1e3 > e.audioOffset / 1e4) {
+            wordBoundary = e;
+          } else {
+            break;
+          }
+        }
+        if (wordBoundary !== void 0) {
+          if (~[".", ",", "!", "?"].indexOf(wordBoundary.text)) {
+            wordBoundary = (_a = this.previousWordBoundary) != null ? _a : void 0;
+          }
+          if (wordBoundary === void 0) {
+            this.highlightDiv.innerHTML = this.originalHighlightDivInnerHTML;
+          } else {
+            if (!this.wordEncounters[wordBoundary.text]) {
+              this.wordEncounters[wordBoundary.text] = 0;
+            }
+            if (this.currentWord !== wordBoundary.text) {
+              this.wordEncounters[wordBoundary.text]++;
+              console.log(this.wordEncounters);
+              this.currentOffset = this.getPosition(
+                this.originalHighlightDivInnerHTML,
+                wordBoundary.text,
+                this.wordEncounters[wordBoundary.text]
+              );
+              this.currentWord = wordBoundary.text;
+            }
+            this.previousWordBoundary = wordBoundary;
+            this.highlightDiv.innerHTML = this.originalHighlightDivInnerHTML.substring(0, this.currentOffset) + "<mark class='co-tts-highlight'>" + wordBoundary.text + "</mark>" + this.originalHighlightDivInnerHTML.substring(this.currentOffset + wordBoundary.wordLength);
+          }
+        } else {
+          this.highlightDiv.innerHTML = this.originalHighlightDivInnerHTML;
+        }
+      }
+    }, 50);
+  }
+  getPosition(string, subString, index) {
+    const regex = new RegExp(`\\b${subString}\\b`, "g");
+    console.log(string.split(regex, index).join(subString), regex, index);
+    return string.split(regex, index).join(subString).length;
   }
 }
 export { TextToSpeech as default };

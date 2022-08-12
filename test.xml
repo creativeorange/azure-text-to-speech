@@ -1,0 +1,9 @@
+<speak version='1.0' xml:lang='nl-NL'>
+    <voice xml:lang='nl-NL' name='nl-NL-ColetteNeural'>
+        Tijdens deze opdracht
+    <lexeme>
+        <grapheme>Scotland MV</grapheme>
+        <alias>Scotland Media Wave</alias>
+  </lexeme>
+    </voice>
+</speak>
