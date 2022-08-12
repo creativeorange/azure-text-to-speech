@@ -6051,7 +6051,7 @@ class TextToSpeech {
           }
         }
         if (wordBoundary !== void 0) {
-          if (~[".", ",", "!", "?", "*"].indexOf(wordBoundary.text)) {
+          if (~[".", ",", "!", "?", "*", "(", ")", "&", "\\", "/", "^", "[", "]", "<", ">"].indexOf(wordBoundary.text)) {
             wordBoundary = (_a = this.previousWordBoundary) != null ? _a : void 0;
           }
           if (wordBoundary === void 0) {

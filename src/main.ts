@@ -255,7 +255,8 @@ export default class TextToSpeech {
                 }
 
                 if (wordBoundary !== undefined) {
-                    if (~['.', ',', '!', '?', '*'].indexOf(wordBoundary.text)) {
+                    if (~['.', ',', '!', '?', '*', '(', ')', '&', '\\', '/', '^', '[', ']', '<', '>']
+                        .indexOf(wordBoundary.text)) {
                         wordBoundary = this.previousWordBoundary ?? undefined;
                     }
 
