@@ -31,6 +31,7 @@ export default class TextToSpeech {
     originalHighlightDivInnerHTML: string = '';
     currentWord: string = '';
     currentOffset: number = 0;
+    wordBoundaryOffset: number = 0;
 
 
     constructor(key: string, region: string, voice: string) {
@@ -92,8 +93,16 @@ export default class TextToSpeech {
             }
 
             if (referenceDiv.hasAttribute('co-tts.highlight')) {
-                this.highlightDiv = referenceDiv;
-                this.originalHighlightDivInnerHTML = referenceDiv.innerHTML;
+                if (referenceDiv.attributes.getNamedItem('co-tts.highlight')?.value !== '') {
+                    const newReferenceDiv =
+                        document.getElementById(referenceDiv.attributes.getNamedItem('co-tts.highlight').value);
+
+                    this.highlightDiv = newReferenceDiv;
+                    this.originalHighlightDivInnerHTML = newReferenceDiv.innerHTML;
+                } else {
+                    this.highlightDiv = referenceDiv;
+                    this.originalHighlightDivInnerHTML = referenceDiv.innerHTML;
+                }
             }
 
             this.startSynthesizer(node, attr);
@@ -121,8 +130,15 @@ export default class TextToSpeech {
             await this.createInterval();
             this.clickedNode = node;
             if (node.hasAttribute('co-tts.highlight')) {
-                this.highlightDiv = node;
-                this.originalHighlightDivInnerHTML = node.innerHTML;
+                if (node.attributes.getNamedItem('co-tts.highlight')?.value !== '') {
+                    const newReferenceDiv = document.getElementById(node.attributes.getNamedItem('co-tts.highlight').value);
+
+                    this.highlightDiv = newReferenceDiv;
+                    this.originalHighlightDivInnerHTML = newReferenceDiv.innerHTML;
+                } else {
+                    this.highlightDiv = node;
+                    this.originalHighlightDivInnerHTML = node.innerHTML;
+                }
             }
             if (attr.value === '') {
                 this.textToRead = node.innerHTML;
@@ -139,8 +155,15 @@ export default class TextToSpeech {
         await this.createInterval();
         this.clickedNode = node;
         if (node.hasAttribute('co-tts.highlight')) {
-            this.highlightDiv = node;
-            this.originalHighlightDivInnerHTML = node.innerHTML;
+            if (node.attributes.getNamedItem('co-tts.highlight')?.value !== '') {
+                const newReferenceDiv = document.getElementById(node.attributes.getNamedItem('co-tts.highlight').value);
+
+                this.highlightDiv = newReferenceDiv;
+                this.originalHighlightDivInnerHTML = newReferenceDiv.innerHTML;
+            } else {
+                this.highlightDiv = node;
+                this.originalHighlightDivInnerHTML = node.innerHTML;
+            }
         }
         if (attr.value === '') {
             this.textToRead = node.innerHTML;
@@ -255,7 +278,7 @@ export default class TextToSpeech {
                 }
 
                 if (wordBoundary !== undefined) {
-                    if (~['.', ',', '!', '?', '*', '(', ')', '&', '\\', '/', '^', '[', ']', '<', '>']
+                    if (~['.', ',', '!', '?', '*', '(', ')', '&', '\\', '/', '^', '[', ']', '<', '>', ':']
                         .indexOf(wordBoundary.text)) {
                         wordBoundary = this.previousWordBoundary ?? undefined;
                     }
@@ -267,20 +290,28 @@ export default class TextToSpeech {
                             this.wordEncounters[wordBoundary.text] = 0;
                         }
 
-                        if (this.currentWord !== wordBoundary.text) {
-                            this.wordEncounters[wordBoundary.text]++;
+                        if (this.currentWord !== wordBoundary.text || this.wordBoundaryOffset !== wordBoundary.textOffset) {
                             this.currentOffset = this.getPosition(
                                 this.originalHighlightDivInnerHTML,
                                 wordBoundary.text,
                                 this.wordEncounters[wordBoundary.text]
                             );
+                            this.wordEncounters[wordBoundary.text] = this.currentOffset + wordBoundary.wordLength;
                             this.currentWord = wordBoundary.text;
+                            this.wordBoundaryOffset = wordBoundary.textOffset;
                         }
 
-                        this.previousWordBoundary = wordBoundary;
-                        this.highlightDiv.innerHTML = this.originalHighlightDivInnerHTML.substring(0, this.currentOffset) +
-                          '<mark class=\'co-tts-highlight\'>' + wordBoundary.text + '</mark>' +
-                          this.originalHighlightDivInnerHTML.substring(this.currentOffset + wordBoundary.wordLength);
+                        if (this.currentOffset <= -1) {
+                            this.highlightDiv.innerHTML = this.originalHighlightDivInnerHTML;
+                        } else {
+                            this.previousWordBoundary = wordBoundary;
+                            const startOfString = this.originalHighlightDivInnerHTML.substring(0, this.currentOffset);
+                            const endOffset = this.currentOffset + wordBoundary.wordLength;
+                            const endOfString = this.originalHighlightDivInnerHTML.substring(endOffset);
+                            this.highlightDiv.innerHTML = `
+                                ${startOfString}<mark class='co-tts-highlight'>${wordBoundary.text}</mark>${endOfString}
+                            `;
+                        }
                     }
                 } else {
                     this.highlightDiv.innerHTML = this.originalHighlightDivInnerHTML;
@@ -289,8 +320,9 @@ export default class TextToSpeech {
         }, 50);
     }
 
-    getPosition(string: string, subString: string, index: number) {
-        const regex = new RegExp(`\\b${subString}\\b`, 'g');
-        return string.split(regex, index).join(subString).length;
+    getPosition(string: string, subString: string, lastOffset: number) {
+        const regex = new RegExp(`(?:^|[^-\\w])(${subString})\\b`, 'g');
+        const offset = string.slice(lastOffset).search(regex);
+        return (offset <= 0 ? offset : offset + 1) + lastOffset;
     }
 }
