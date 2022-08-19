@@ -253,7 +253,6 @@ export default class TextToSpeech {
             document.dispatchEvent(new CustomEvent('COAzureTTSStartedPlaying', {}));
         };
 
-        console.log(this.buildSSML(this.textToRead));
         this.synthesizer.speakSsmlAsync(this.buildSSML(this.textToRead),
             () => {
                 this.synthesizer.close();

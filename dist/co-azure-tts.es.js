@@ -6047,7 +6047,6 @@ class TextToSpeech {
     this.player.onAudioStart = async () => {
       document.dispatchEvent(new CustomEvent("COAzureTTSStartedPlaying", {}));
     };
-    console.log(this.buildSSML(this.textToRead));
     this.synthesizer.speakSsmlAsync(
       this.buildSSML(this.textToRead),
       () => {
