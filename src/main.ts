@@ -48,6 +48,24 @@ export default class TextToSpeech {
         await this.registerBindings(document);
     }
 
+    setVoice(voice: string) {
+        this.voice = voice;
+
+        return this;
+    }
+
+    setRate(rate: number) {
+        this.rate = rate;
+
+        return this;
+    }
+
+    setPitch(pitch: number) {
+        this.pitch = pitch;
+
+        return this;
+    }
+
     async registerBindings(node: any) {
         const nodes = node.childNodes;
         for (let i = 0; i < nodes.length; i++) {

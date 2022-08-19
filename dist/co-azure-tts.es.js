@@ -5872,6 +5872,18 @@ class TextToSpeech {
   async start() {
     await this.registerBindings(document);
   }
+  setVoice(voice) {
+    this.voice = voice;
+    return this;
+  }
+  setRate(rate) {
+    this.rate = rate;
+    return this;
+  }
+  setPitch(pitch) {
+    this.pitch = pitch;
+    return this;
+  }
   async registerBindings(node) {
     const nodes = node.childNodes;
     for (let i = 0; i < nodes.length; i++) {
