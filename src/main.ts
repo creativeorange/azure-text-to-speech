@@ -10,6 +10,8 @@ export default class TextToSpeech {
     key: string;
     region: string;
     voice: string;
+    rate: number;
+    pitch: number;
 
     textToRead: string = '';
 
@@ -34,10 +36,12 @@ export default class TextToSpeech {
     wordBoundaryOffset: number = 0;
 
 
-    constructor(key: string, region: string, voice: string) {
+    constructor(key: string, region: string, voice: string, rate: number = 0, pitch: number = 0) {
         this.key = key;
         this.region = region;
         this.voice = voice;
+        this.rate = rate;
+        this.pitch = pitch;
     }
 
     async start() {
@@ -155,7 +159,6 @@ export default class TextToSpeech {
         await this.createInterval();
         this.clickedNode = node;
         if (node.hasAttribute('co-tts.highlight')) {
-            console.log(node.attributes.getNamedItem('co-tts.highlight'));
             if (node.attributes.getNamedItem('co-tts.highlight')?.value !== '') {
                 const newReferenceDiv = document.getElementById(node.attributes.getNamedItem('co-tts.highlight').value);
 
@@ -250,7 +253,8 @@ export default class TextToSpeech {
             document.dispatchEvent(new CustomEvent('COAzureTTSStartedPlaying', {}));
         };
 
-        this.synthesizer.speakTextAsync(this.textToRead,
+        console.log(this.buildSSML(this.textToRead));
+        this.synthesizer.speakSsmlAsync(this.buildSSML(this.textToRead),
             () => {
                 this.synthesizer.close();
                 this.synthesizer = undefined;
@@ -325,5 +329,19 @@ export default class TextToSpeech {
         const regex = new RegExp(`(?:^|[^-\\w])(${subString})\\b`, 'g');
         const offset = string.slice(lastOffset).search(regex);
         return (offset <= 0 ? offset : offset + 1) + lastOffset;
+    }
+
+    buildSSML(text: string) {
+        return `<speak xmlns="http://www.w3.org/2001/10/synthesis" 
+            xmlns:mstts="http://www.w3.org/2001/mstts" 
+            xmlns:emo="http://www.w3.org/2009/10/emotionml" 
+            version="1.0" 
+            xml:lang="en-US">
+            <voice name="${this.voice}">
+                <prosody rate="${this.rate}%" pitch="${this.pitch}%">
+                ${text}
+                </prosody>
+            </voice>
+        </speak>`;
     }
 }

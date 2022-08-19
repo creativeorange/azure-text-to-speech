@@ -5842,10 +5842,12 @@ class RestMessageAdapter {
   }
 }
 class TextToSpeech {
-  constructor(key, region, voice) {
+  constructor(key, region, voice, rate = 0, pitch = 0) {
     __publicField(this, "key");
     __publicField(this, "region");
     __publicField(this, "voice");
+    __publicField(this, "rate");
+    __publicField(this, "pitch");
     __publicField(this, "textToRead", "");
     __publicField(this, "wordBoundryList", []);
     __publicField(this, "clickedNode");
@@ -5864,6 +5866,8 @@ class TextToSpeech {
     this.key = key;
     this.region = region;
     this.voice = voice;
+    this.rate = rate;
+    this.pitch = pitch;
   }
   async start() {
     await this.registerBindings(document);
@@ -5965,7 +5969,6 @@ class TextToSpeech {
     await this.createInterval();
     this.clickedNode = node;
     if (node.hasAttribute("co-tts.highlight")) {
-      console.log(node.attributes.getNamedItem("co-tts.highlight"));
       if (((_a = node.attributes.getNamedItem("co-tts.highlight")) == null ? void 0 : _a.value) !== "") {
         const newReferenceDiv = document.getElementById(node.attributes.getNamedItem("co-tts.highlight").value);
         this.highlightDiv = newReferenceDiv;
@@ -6044,8 +6047,9 @@ class TextToSpeech {
     this.player.onAudioStart = async () => {
       document.dispatchEvent(new CustomEvent("COAzureTTSStartedPlaying", {}));
     };
-    this.synthesizer.speakTextAsync(
-      this.textToRead,
+    console.log(this.buildSSML(this.textToRead));
+    this.synthesizer.speakSsmlAsync(
+      this.buildSSML(this.textToRead),
       () => {
         this.synthesizer.close();
         this.synthesizer = void 0;
@@ -6114,6 +6118,19 @@ class TextToSpeech {
     const regex = new RegExp(`(?:^|[^-\\w])(${subString})\\b`, "g");
     const offset = string.slice(lastOffset).search(regex);
     return (offset <= 0 ? offset : offset + 1) + lastOffset;
+  }
+  buildSSML(text) {
+    return `<speak xmlns="http://www.w3.org/2001/10/synthesis" 
+            xmlns:mstts="http://www.w3.org/2001/mstts" 
+            xmlns:emo="http://www.w3.org/2009/10/emotionml" 
+            version="1.0" 
+            xml:lang="en-US">
+            <voice name="${this.voice}">
+                <prosody rate="${this.rate}%" pitch="${this.pitch}%">
+                ${text}
+                </prosody>
+            </voice>
+        </speak>`;
   }
 }
 export { TextToSpeech as default };
