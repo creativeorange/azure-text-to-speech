@@ -79,8 +79,8 @@ export default class TextToSpeech {
         node.addEventListener('click', async (_: any) => {
             this.stopPlayer();
             await this.createInterval();
-            this.clickedNode = node;
             const referenceDiv = document.getElementById(attr.value);
+            this.clickedNode = referenceDiv;
 
             if (!referenceDiv) {
                 return;
@@ -89,7 +89,7 @@ export default class TextToSpeech {
             if (referenceDiv.hasAttribute('co-tts.text') && referenceDiv.getAttribute('co-tts.text') !== '') {
                 this.textToRead = referenceDiv.getAttribute('co-tts.text') ?? '';
             } else {
-                this.textToRead = referenceDiv.innerHTML;
+                this.textToRead = referenceDiv.innerText;
             }
 
             if (referenceDiv.hasAttribute('co-tts.highlight')) {
@@ -141,7 +141,7 @@ export default class TextToSpeech {
                 }
             }
             if (attr.value === '') {
-                this.textToRead = node.innerHTML;
+                this.textToRead = node.innerText;
             } else {
                 this.textToRead = attr.value;
             }
@@ -155,6 +155,7 @@ export default class TextToSpeech {
         await this.createInterval();
         this.clickedNode = node;
         if (node.hasAttribute('co-tts.highlight')) {
+            console.log(node.attributes.getNamedItem('co-tts.highlight'));
             if (node.attributes.getNamedItem('co-tts.highlight')?.value !== '') {
                 const newReferenceDiv = document.getElementById(node.attributes.getNamedItem('co-tts.highlight').value);
 
@@ -166,7 +167,7 @@ export default class TextToSpeech {
             }
         }
         if (attr.value === '') {
-            this.textToRead = node.innerHTML;
+            this.textToRead = node.innerText;
         } else {
             this.textToRead = attr.value;
         }

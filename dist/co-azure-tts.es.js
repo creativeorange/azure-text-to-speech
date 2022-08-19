@@ -5900,15 +5900,15 @@ class TextToSpeech {
       var _a, _b;
       this.stopPlayer();
       await this.createInterval();
-      this.clickedNode = node;
       const referenceDiv = document.getElementById(attr.value);
+      this.clickedNode = referenceDiv;
       if (!referenceDiv) {
         return;
       }
       if (referenceDiv.hasAttribute("co-tts.text") && referenceDiv.getAttribute("co-tts.text") !== "") {
         this.textToRead = (_a = referenceDiv.getAttribute("co-tts.text")) != null ? _a : "";
       } else {
-        this.textToRead = referenceDiv.innerHTML;
+        this.textToRead = referenceDiv.innerText;
       }
       if (referenceDiv.hasAttribute("co-tts.highlight")) {
         if (((_b = referenceDiv.attributes.getNamedItem("co-tts.highlight")) == null ? void 0 : _b.value) !== "") {
@@ -5952,7 +5952,7 @@ class TextToSpeech {
         }
       }
       if (attr.value === "") {
-        this.textToRead = node.innerHTML;
+        this.textToRead = node.innerText;
       } else {
         this.textToRead = attr.value;
       }
@@ -5965,6 +5965,7 @@ class TextToSpeech {
     await this.createInterval();
     this.clickedNode = node;
     if (node.hasAttribute("co-tts.highlight")) {
+      console.log(node.attributes.getNamedItem("co-tts.highlight"));
       if (((_a = node.attributes.getNamedItem("co-tts.highlight")) == null ? void 0 : _a.value) !== "") {
         const newReferenceDiv = document.getElementById(node.attributes.getNamedItem("co-tts.highlight").value);
         this.highlightDiv = newReferenceDiv;
@@ -5975,7 +5976,7 @@ class TextToSpeech {
       }
     }
     if (attr.value === "") {
-      this.textToRead = node.innerHTML;
+      this.textToRead = node.innerText;
     } else {
       this.textToRead = attr.value;
     }
