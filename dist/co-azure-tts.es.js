@@ -208,6 +208,19 @@ class ConnectionErrorEvent extends ConnectionEvent {
     return this.privType;
   }
 }
+class ConnectionEstablishErrorEvent extends ConnectionEvent {
+  constructor(connectionId, statuscode, reason) {
+    super("ConnectionEstablishErrorEvent", connectionId, EventType.Error);
+    this.privStatusCode = statuscode;
+    this.privReason = reason;
+  }
+  get reason() {
+    return this.privReason;
+  }
+  get statusCode() {
+    return this.privStatusCode;
+  }
+}
 class ConnectionMessageReceivedEvent extends ConnectionEvent {
   constructor(connectionId, networkReceivedTimeISO, message) {
     super("ConnectionMessageReceivedEvent", connectionId);
@@ -648,7 +661,7 @@ function marshalPromiseToCallbacks(promise, cb, err) {
     }
   });
 }
-var __awaiter$d = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
+var __awaiter$i = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
   function adopt(value) {
     return value instanceof P ? value : new P(function(resolve) {
       resolve(value);
@@ -729,7 +742,7 @@ class Queue {
     return this.privSubscribers == null;
   }
   drainAndDispose(pendingItemProcessor, reason) {
-    return __awaiter$d(this, void 0, void 0, function* () {
+    return __awaiter$i(this, void 0, void 0, function* () {
       if (!this.isDisposed() && !this.privIsDisposing) {
         this.privDisposeReason = reason;
         this.privIsDisposing = true;
@@ -767,7 +780,7 @@ class Queue {
     });
   }
   dispose(reason) {
-    return __awaiter$d(this, void 0, void 0, function* () {
+    return __awaiter$i(this, void 0, void 0, function* () {
       yield this.drainAndDispose(null, reason);
     });
   }
@@ -897,7 +910,7 @@ class RiffPcmEncoder {
     return dstFrame;
   }
 }
-var __awaiter$c = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
+var __awaiter$h = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
   function adopt(value) {
     return value instanceof P ? value : new P(function(resolve) {
       resolve(value);
@@ -963,7 +976,7 @@ class Stream {
     if (this.privIsReadEnded) {
       throw new InvalidOperationError("Stream read has already finished");
     }
-    return this.privReaderQueue.dequeue().then((streamChunk) => __awaiter$c(this, void 0, void 0, function* () {
+    return this.privReaderQueue.dequeue().then((streamChunk) => __awaiter$h(this, void 0, void 0, function* () {
       if (streamChunk === void 0 || streamChunk.isEnd) {
         yield this.privReaderQueue.dispose("End of stream reached");
       }
@@ -982,6 +995,11 @@ class Stream {
     }
   }
 }
+var TranslationStatus;
+(function(TranslationStatus2) {
+  TranslationStatus2[TranslationStatus2["Success"] = 0] = "Success";
+  TranslationStatus2[TranslationStatus2["Error"] = 1] = "Error";
+})(TranslationStatus || (TranslationStatus = {}));
 class ChunkedArrayBufferStream extends Stream {
   constructor(targetChunkSize, streamId) {
     super(streamId);
@@ -1027,6 +1045,93 @@ class ChunkedArrayBufferStream extends Stream {
     super.close();
   }
 }
+class Timeout {
+  static load(url) {
+    const scheduledTimeoutFunctions = /* @__PURE__ */ new Map([[0, () => {
+    }]]);
+    const unhandledRequests = /* @__PURE__ */ new Map();
+    const worker = new Worker(url);
+    worker.addEventListener("message", ({ data }) => {
+      if (Timeout.isCallNotification(data)) {
+        const { params: { timerId } } = data;
+        const idOrFunc = scheduledTimeoutFunctions.get(timerId);
+        if (typeof idOrFunc === "number") {
+          const unhandledTimerId = unhandledRequests.get(idOrFunc);
+          if (unhandledTimerId === void 0 || unhandledTimerId !== timerId) {
+            throw new Error("The timer is in an undefined state.");
+          }
+        } else if (typeof idOrFunc !== "undefined") {
+          idOrFunc();
+          scheduledTimeoutFunctions.delete(timerId);
+        } else {
+          throw new Error("The timer is in an undefined state.");
+        }
+      } else if (Timeout.isClearResponse(data)) {
+        const { id } = data;
+        const unhandledTimerId = unhandledRequests.get(id);
+        if (unhandledTimerId === void 0) {
+          throw new Error("The timer is in an undefined state.");
+        }
+        unhandledRequests.delete(id);
+        scheduledTimeoutFunctions.delete(unhandledTimerId);
+      } else {
+        const { error: { message } } = data;
+        throw new Error(message);
+      }
+    });
+    const clearTimeout = (timerId) => {
+      const id = Math.random();
+      unhandledRequests.set(id, timerId);
+      scheduledTimeoutFunctions.set(timerId, id);
+      worker.postMessage({
+        id,
+        method: "clear",
+        params: { timerId }
+      });
+    };
+    const setTimeout2 = (func, delay) => {
+      const timerId = Math.random();
+      scheduledTimeoutFunctions.set(timerId, func);
+      worker.postMessage({
+        id: null,
+        method: "set",
+        params: {
+          delay,
+          now: performance.now(),
+          timerId
+        }
+      });
+      return timerId;
+    };
+    return {
+      clearTimeout,
+      setTimeout: setTimeout2
+    };
+  }
+  static loadWorkerTimers() {
+    const worker = `!function(e){var t={};function n(r){if(t[r])return t[r].exports;var o=t[r]={i:r,l:!1,exports:{}};return e[r].call(o.exports,o,o.exports,n),o.l=!0,o.exports}n.m=e,n.c=t,n.d=function(e,t,r){n.o(e,t)||Object.defineProperty(e,t,{enumerable:!0,get:r})},n.r=function(e){"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(e,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(e,"__esModule",{value:!0})},n.t=function(e,t){if(1&t&&(e=n(e)),8&t)return e;if(4&t&&"object"==typeof e&&e&&e.__esModule)return e;var r=Object.create(null);if(n.r(r),Object.defineProperty(r,"default",{enumerable:!0,value:e}),2&t&&"string"!=typeof e)for(var o in e)n.d(r,o,function(t){return e[t]}.bind(null,o));return r},n.n=function(e){var t=e&&e.__esModule?function(){return e.default}:function(){return e};return n.d(t,"a",t),t},n.o=function(e,t){return Object.prototype.hasOwnProperty.call(e,t)},n.p="",n(n.s=14)}([function(e,t,n){"use strict";n.d(t,"a",(function(){return i})),n.d(t,"b",(function(){return u})),n.d(t,"c",(function(){return a})),n.d(t,"d",(function(){return d}));const r=new Map,o=new Map,i=e=>{const t=r.get(e);if(void 0===t)throw new Error('There is no interval scheduled with the given id "'.concat(e,'".'));clearTimeout(t),r.delete(e)},u=e=>{const t=o.get(e);if(void 0===t)throw new Error('There is no timeout scheduled with the given id "'.concat(e,'".'));clearTimeout(t),o.delete(e)},f=(e,t)=>{let n,r;if("performance"in self){const o=performance.now();n=o,r=e-Math.max(0,o-t)}else n=Date.now(),r=e;return{expected:n+r,remainingDelay:r}},c=(e,t,n,r)=>{const o="performance"in self?performance.now():Date.now();o>n?postMessage({id:null,method:"call",params:{timerId:t}}):e.set(t,setTimeout(c,n-o,e,t,n))},a=(e,t,n)=>{const{expected:o,remainingDelay:i}=f(e,n);r.set(t,setTimeout(c,i,r,t,o))},d=(e,t,n)=>{const{expected:r,remainingDelay:i}=f(e,n);o.set(t,setTimeout(c,i,o,t,r))}},function(e,t,n){"use strict";n.r(t);var r=n(2);for(var o in r)"default"!==o&&function(e){n.d(t,e,(function(){return r[e]}))}(o);var i=n(3);for(var o in i)"default"!==o&&function(e){n.d(t,e,(function(){return i[e]}))}(o);var u=n(4);for(var o in u)"default"!==o&&function(e){n.d(t,e,(function(){return u[e]}))}(o);var f=n(5);for(var o in f)"default"!==o&&function(e){n.d(t,e,(function(){return f[e]}))}(o);var c=n(6);for(var o in c)"default"!==o&&function(e){n.d(t,e,(function(){return c[e]}))}(o);var a=n(7);for(var o in a)"default"!==o&&function(e){n.d(t,e,(function(){return a[e]}))}(o);var d=n(8);for(var o in d)"default"!==o&&function(e){n.d(t,e,(function(){return d[e]}))}(o);var s=n(9);for(var o in s)"default"!==o&&function(e){n.d(t,e,(function(){return s[e]}))}(o)},function(e,t){},function(e,t){},function(e,t){},function(e,t){},function(e,t){},function(e,t){},function(e,t){},function(e,t){},function(e,t,n){"use strict";n.r(t);var r=n(11);for(var o in r)"default"!==o&&function(e){n.d(t,e,(function(){return r[e]}))}(o);var i=n(12);for(var o in i)"default"!==o&&function(e){n.d(t,e,(function(){return i[e]}))}(o);var u=n(13);for(var o in u)"default"!==o&&function(e){n.d(t,e,(function(){return u[e]}))}(o)},function(e,t){},function(e,t){},function(e,t){},function(e,t,n){"use strict";n.r(t);var r=n(0),o=n(1);for(var i in o)"default"!==i&&function(e){n.d(t,e,(function(){return o[e]}))}(i);var u=n(10);for(var i in u)"default"!==i&&function(e){n.d(t,e,(function(){return u[e]}))}(i);addEventListener("message",({data:e})=>{try{if("clear"===e.method){const{id:t,params:{timerId:n}}=e;Object(r.b)(n),postMessage({error:null,id:t})}else{if("set"!==e.method)throw new Error('The given method "'.concat(e.method,'" is not supported'));{const{params:{delay:t,now:n,timerId:o}}=e;Object(r.d)(t,o,n)}}}catch(t){postMessage({error:{message:t.message},id:e.id,result:null})}})}]);`;
+    return () => {
+      if (Timeout.workerTimers !== null) {
+        return Timeout.workerTimers;
+      }
+      const blob = new Blob([worker], { type: "application/javascript; charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      Timeout.workerTimers = Timeout.load(url);
+      Timeout.workerTimers.setTimeout(() => URL.revokeObjectURL(url), 0);
+      return Timeout.workerTimers;
+    };
+  }
+  static isCallNotification(message) {
+    return message.method !== void 0 && message.method === "call";
+  }
+  static isClearResponse(message) {
+    return message.error === null && typeof message.id === "number";
+  }
+}
+Timeout.workerTimers = null;
+Timeout.clearTimeout = (timerId) => Timeout.timers().clearTimeout(timerId);
+Timeout.setTimeout = (func, delay) => Timeout.timers().setTimeout(func, delay);
+Timeout.timers = Timeout.loadWorkerTimers();
 class OCSPEvent extends PlatformEvent {
   constructor(eventName, eventType, signature) {
     super(eventName, eventType);
@@ -1352,7 +1457,7 @@ class AudioStreamFormatImpl extends AudioStreamFormat {
     }
   }
 }
-var __awaiter$b = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
+var __awaiter$g = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
   function adopt(value) {
     return value instanceof P ? value : new P(function(resolve) {
       resolve(value);
@@ -1452,13 +1557,13 @@ class PushAudioInputStreamImpl extends PushAudioInputStream {
     return;
   }
   attach(audioNodeId) {
-    return __awaiter$b(this, void 0, void 0, function* () {
+    return __awaiter$g(this, void 0, void 0, function* () {
       this.onEvent(new AudioStreamNodeAttachingEvent(this.privId, audioNodeId));
       yield this.turnOn();
       const stream = this.privStream;
       this.onEvent(new AudioStreamNodeAttachedEvent(this.privId, audioNodeId));
       return {
-        detach: () => __awaiter$b(this, void 0, void 0, function* () {
+        detach: () => __awaiter$g(this, void 0, void 0, function* () {
           this.onEvent(new AudioStreamNodeDetachedEvent(this.privId, audioNodeId));
           return this.turnOff();
         }),
@@ -1541,7 +1646,7 @@ class PullAudioInputStreamImpl extends PullAudioInputStream {
     return;
   }
   attach(audioNodeId) {
-    return __awaiter$b(this, void 0, void 0, function* () {
+    return __awaiter$g(this, void 0, void 0, function* () {
       this.onEvent(new AudioStreamNodeAttachingEvent(this.privId, audioNodeId));
       yield this.turnOn();
       this.onEvent(new AudioStreamNodeAttachedEvent(this.privId, audioNodeId));
@@ -1804,7 +1909,7 @@ AudioOutputFormatImpl.SpeechSynthesisOutputFormatToString = {
   [SpeechSynthesisOutputFormat.Raw44100Hz16BitMonoPcm]: "raw-44100hz-16bit-mono-pcm",
   [SpeechSynthesisOutputFormat.Riff44100Hz16BitMonoPcm]: "riff-44100hz-16bit-mono-pcm"
 };
-var __awaiter$a = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
+var __awaiter$f = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
   function adopt(value) {
     return value instanceof P ? value : new P(function(resolve) {
       resolve(value);
@@ -1866,7 +1971,7 @@ class PullAudioOutputStreamImpl extends PullAudioOutputStream {
     return this.privId;
   }
   read(dataBuffer) {
-    return __awaiter$a(this, void 0, void 0, function* () {
+    return __awaiter$f(this, void 0, void 0, function* () {
       const intView = new Int8Array(dataBuffer);
       let totalBytes = 0;
       if (this.privLastChunkView !== void 0) {
@@ -2085,11 +2190,120 @@ class PullAudioInputStreamCallback {
 }
 class PushAudioOutputStreamCallback {
 }
+class SessionEventArgs {
+  constructor(sessionId) {
+    this.privSessionId = sessionId;
+  }
+  get sessionId() {
+    return this.privSessionId;
+  }
+}
+class RecognitionEventArgs extends SessionEventArgs {
+  constructor(offset, sessionId) {
+    super(sessionId);
+    this.privOffset = offset;
+  }
+  get offset() {
+    return this.privOffset;
+  }
+}
 var OutputFormat;
 (function(OutputFormat2) {
   OutputFormat2[OutputFormat2["Simple"] = 0] = "Simple";
   OutputFormat2[OutputFormat2["Detailed"] = 1] = "Detailed";
 })(OutputFormat || (OutputFormat = {}));
+class RecognitionResult {
+  constructor(resultId, reason, text, duration, offset, language, languageDetectionConfidence, errorDetails, json, properties) {
+    this.privResultId = resultId;
+    this.privReason = reason;
+    this.privText = text;
+    this.privDuration = duration;
+    this.privOffset = offset;
+    this.privLanguage = language;
+    this.privLanguageDetectionConfidence = languageDetectionConfidence;
+    this.privErrorDetails = errorDetails;
+    this.privJson = json;
+    this.privProperties = properties;
+  }
+  get resultId() {
+    return this.privResultId;
+  }
+  get reason() {
+    return this.privReason;
+  }
+  get text() {
+    return this.privText;
+  }
+  get duration() {
+    return this.privDuration;
+  }
+  get offset() {
+    return this.privOffset;
+  }
+  get language() {
+    return this.privLanguage;
+  }
+  get languageDetectionConfidence() {
+    return this.privLanguageDetectionConfidence;
+  }
+  get errorDetails() {
+    return this.privErrorDetails;
+  }
+  get json() {
+    return this.privJson;
+  }
+  get properties() {
+    return this.privProperties;
+  }
+}
+class SpeechRecognitionResult extends RecognitionResult {
+  constructor(resultId, reason, text, duration, offset, language, languageDetectionConfidence, speakerId, errorDetails, json, properties) {
+    super(resultId, reason, text, duration, offset, language, languageDetectionConfidence, errorDetails, json, properties);
+    this.privSpeakerId = speakerId;
+  }
+  get speakerId() {
+    return this.privSpeakerId;
+  }
+}
+class TranslationRecognitionEventArgs extends RecognitionEventArgs {
+  constructor(result, offset, sessionId) {
+    super(offset, sessionId);
+    this.privResult = result;
+  }
+  get result() {
+    return this.privResult;
+  }
+}
+class TranslationSynthesisEventArgs extends SessionEventArgs {
+  constructor(result, sessionId) {
+    super(sessionId);
+    this.privResult = result;
+  }
+  get result() {
+    return this.privResult;
+  }
+}
+class TranslationRecognitionResult extends SpeechRecognitionResult {
+  constructor(translations, resultId, reason, text, duration, offset, errorDetails, json, properties) {
+    super(resultId, reason, text, duration, offset, void 0, void 0, void 0, errorDetails, json, properties);
+    this.privTranslations = translations;
+  }
+  get translations() {
+    return this.privTranslations;
+  }
+}
+class TranslationSynthesisResult {
+  constructor(reason, audio) {
+    this.privReason = reason;
+    this.privAudio = audio;
+  }
+  get audio() {
+    return this.privAudio;
+  }
+  get reason() {
+    return this.privReason;
+  }
+}
 var ResultReason;
 (function(ResultReason2) {
   ResultReason2[ResultReason2["NoMatch"] = 0] = "NoMatch";
@@ -2258,6 +2472,153 @@ class SpeechConfigImpl extends SpeechConfig {
     this.privProperties.setProperty(PropertyId.SpeechServiceConnection_SynthOutputFormat, SpeechSynthesisOutputFormat[format]);
   }
 }
+class SpeechTranslationConfig extends SpeechConfig {
+  constructor() {
+    super();
+  }
+  static fromSubscription(subscriptionKey, region) {
+    Contracts.throwIfNullOrWhitespace(subscriptionKey, "subscriptionKey");
+    Contracts.throwIfNullOrWhitespace(region, "region");
+    const ret = new SpeechTranslationConfigImpl();
+    ret.properties.setProperty(PropertyId.SpeechServiceConnection_Key, subscriptionKey);
+    ret.properties.setProperty(PropertyId.SpeechServiceConnection_Region, region);
+    return ret;
+  }
+  static fromAuthorizationToken(authorizationToken, region) {
+    Contracts.throwIfNullOrWhitespace(authorizationToken, "authorizationToken");
+    Contracts.throwIfNullOrWhitespace(region, "region");
+    const ret = new SpeechTranslationConfigImpl();
+    ret.properties.setProperty(PropertyId.SpeechServiceAuthorization_Token, authorizationToken);
+    ret.properties.setProperty(PropertyId.SpeechServiceConnection_Region, region);
+    return ret;
+  }
+  static fromHost(hostName, subscriptionKey) {
+    Contracts.throwIfNull(hostName, "hostName");
+    const speechImpl = new SpeechTranslationConfigImpl();
+    speechImpl.setProperty(PropertyId.SpeechServiceConnection_Host, hostName.protocol + "//" + hostName.hostname + (hostName.port === "" ? "" : ":" + hostName.port));
+    if (void 0 !== subscriptionKey) {
+      speechImpl.setProperty(PropertyId.SpeechServiceConnection_Key, subscriptionKey);
+    }
+    return speechImpl;
+  }
+  static fromEndpoint(endpoint, subscriptionKey) {
+    Contracts.throwIfNull(endpoint, "endpoint");
+    Contracts.throwIfNull(subscriptionKey, "subscriptionKey");
+    const ret = new SpeechTranslationConfigImpl();
+    ret.properties.setProperty(PropertyId.SpeechServiceConnection_Endpoint, endpoint.href);
+    ret.properties.setProperty(PropertyId.SpeechServiceConnection_Key, subscriptionKey);
+    return ret;
+  }
+}
+class SpeechTranslationConfigImpl extends SpeechTranslationConfig {
+  constructor() {
+    super();
+    this.privSpeechProperties = new PropertyCollection();
+    this.outputFormat = OutputFormat.Simple;
+  }
+  set authorizationToken(value) {
+    Contracts.throwIfNullOrWhitespace(value, "value");
+    this.privSpeechProperties.setProperty(PropertyId.SpeechServiceAuthorization_Token, value);
+  }
+  set speechRecognitionLanguage(value) {
+    Contracts.throwIfNullOrWhitespace(value, "value");
+    this.privSpeechProperties.setProperty(PropertyId.SpeechServiceConnection_RecoLanguage, value);
+  }
+  get speechRecognitionLanguage() {
+    return this.privSpeechProperties.getProperty(PropertyId[PropertyId.SpeechServiceConnection_RecoLanguage]);
+  }
+  get subscriptionKey() {
+    return this.privSpeechProperties.getProperty(PropertyId[PropertyId.SpeechServiceConnection_Key]);
+  }
+  get outputFormat() {
+    return OutputFormat[this.privSpeechProperties.getProperty(OutputFormatPropertyName, void 0)];
+  }
+  set outputFormat(value) {
+    this.privSpeechProperties.setProperty(OutputFormatPropertyName, OutputFormat[value]);
+  }
+  get endpointId() {
+    return this.privSpeechProperties.getProperty(PropertyId.SpeechServiceConnection_EndpointId);
+  }
+  set endpointId(value) {
+    this.privSpeechProperties.setProperty(PropertyId.SpeechServiceConnection_EndpointId, value);
+  }
+  addTargetLanguage(value) {
+    Contracts.throwIfNullOrWhitespace(value, "value");
+    const languages = this.targetLanguages;
+    languages.push(value);
+    this.privSpeechProperties.setProperty(PropertyId.SpeechServiceConnection_TranslationToLanguages, languages.join(","));
+  }
+  get targetLanguages() {
+    if (this.privSpeechProperties.getProperty(PropertyId.SpeechServiceConnection_TranslationToLanguages, void 0) !== void 0) {
+      return this.privSpeechProperties.getProperty(PropertyId.SpeechServiceConnection_TranslationToLanguages).split(",");
+    } else {
+      return [];
+    }
+  }
+  get voiceName() {
+    return this.getProperty(PropertyId[PropertyId.SpeechServiceConnection_TranslationVoice]);
+  }
+  set voiceName(value) {
+    Contracts.throwIfNullOrWhitespace(value, "value");
+    this.privSpeechProperties.setProperty(PropertyId.SpeechServiceConnection_TranslationVoice, value);
+  }
+  get region() {
+    return this.privSpeechProperties.getProperty(PropertyId.SpeechServiceConnection_Region);
+  }
+  setProxy(proxyHostName, proxyPort, proxyUserName, proxyPassword) {
+    this.setProperty(PropertyId[PropertyId.SpeechServiceConnection_ProxyHostName], proxyHostName);
+    this.setProperty(PropertyId[PropertyId.SpeechServiceConnection_ProxyPort], proxyPort);
+    this.setProperty(PropertyId[PropertyId.SpeechServiceConnection_ProxyUserName], proxyUserName);
+    this.setProperty(PropertyId[PropertyId.SpeechServiceConnection_ProxyPassword], proxyPassword);
+  }
+  getProperty(name, def) {
+    return this.privSpeechProperties.getProperty(name, def);
+  }
+  setProperty(name, value) {
+    this.privSpeechProperties.setProperty(name, value);
+  }
+  get properties() {
+    return this.privSpeechProperties;
+  }
+  close() {
+    return;
+  }
+  setServiceProperty(name, value) {
+    const currentProperties = JSON.parse(this.privSpeechProperties.getProperty(ServicePropertiesPropertyName, "{}"));
+    currentProperties[name] = value;
+    this.privSpeechProperties.setProperty(ServicePropertiesPropertyName, JSON.stringify(currentProperties));
+  }
+  setProfanity(profanity) {
+    this.privSpeechProperties.setProperty(PropertyId.SpeechServiceResponse_ProfanityOption, ProfanityOption[profanity]);
+  }
+  enableAudioLogging() {
+    this.privSpeechProperties.setProperty(PropertyId.SpeechServiceConnection_EnableAudioLogging, "true");
+  }
+  requestWordLevelTimestamps() {
+    this.privSpeechProperties.setProperty(PropertyId.SpeechServiceResponse_RequestWordLevelTimestamps, "true");
+  }
+  enableDictation() {
+    this.privSpeechProperties.setProperty(ForceDictationPropertyName, "true");
+  }
+  get speechSynthesisLanguage() {
+    return this.privSpeechProperties.getProperty(PropertyId.SpeechServiceConnection_SynthLanguage);
+  }
+  set speechSynthesisLanguage(language) {
+    this.privSpeechProperties.setProperty(PropertyId.SpeechServiceConnection_SynthLanguage, language);
+  }
+  get speechSynthesisVoiceName() {
+    return this.privSpeechProperties.getProperty(PropertyId.SpeechServiceConnection_SynthVoice);
+  }
+  set speechSynthesisVoiceName(voice) {
+    this.privSpeechProperties.setProperty(PropertyId.SpeechServiceConnection_SynthVoice, voice);
+  }
+  get speechSynthesisOutputFormat() {
+    return SpeechSynthesisOutputFormat[this.privSpeechProperties.getProperty(PropertyId.SpeechServiceConnection_SynthOutputFormat, void 0)];
+  }
+  set speechSynthesisOutputFormat(format) {
+    this.privSpeechProperties.setProperty(PropertyId.SpeechServiceConnection_SynthOutputFormat, SpeechSynthesisOutputFormat[format]);
+  }
+}
 class PropertyCollection {
   constructor() {
     this.privKeys = [];
@@ -2386,6 +2747,409 @@ var PropertyId;
   PropertyId2[PropertyId2["PronunciationAssessment_Params"] = 65] = "PronunciationAssessment_Params";
   PropertyId2[PropertyId2["SpeakerRecognition_Api_Version"] = 66] = "SpeakerRecognition_Api_Version";
 })(PropertyId || (PropertyId = {}));
+var __awaiter$e = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
+    });
+  }
+  return new (P || (P = Promise))(function(resolve, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function step(result) {
+      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
+};
+class Recognizer {
+  constructor(audioConfig, properties, connectionFactory) {
+    this.audioConfig = audioConfig !== void 0 ? audioConfig : AudioConfig.fromDefaultMicrophoneInput();
+    this.privDisposed = false;
+    this.privProperties = properties.clone();
+    this.privConnectionFactory = connectionFactory;
+    this.implCommonRecognizerSetup();
+  }
+  close(cb, errorCb) {
+    Contracts.throwIfDisposed(this.privDisposed);
+    marshalPromiseToCallbacks(this.dispose(true), cb, errorCb);
+  }
+  get internalData() {
+    return this.privReco;
+  }
+  dispose(disposing) {
+    return __awaiter$e(this, void 0, void 0, function* () {
+      if (this.privDisposed) {
+        return;
+      }
+      this.privDisposed = true;
+      if (disposing) {
+        if (this.privReco) {
+          yield this.privReco.audioSource.turnOff();
+          yield this.privReco.dispose();
+        }
+      }
+    });
+  }
+  static get telemetryEnabled() {
+    return ServiceRecognizerBase.telemetryDataEnabled;
+  }
+  static enableTelemetry(enabled) {
+    ServiceRecognizerBase.telemetryDataEnabled = enabled;
+  }
+  implCommonRecognizerSetup() {
+    let osPlatform = typeof window !== "undefined" ? "Browser" : "Node";
+    let osName = "unknown";
+    let osVersion = "unknown";
+    if (typeof navigator !== "undefined") {
+      osPlatform = osPlatform + "/" + navigator.platform;
+      osName = navigator.userAgent;
+      osVersion = navigator.appVersion;
+    }
+    const recognizerConfig = this.createRecognizerConfig(new SpeechServiceConfig(new Context(new OS(osPlatform, osName, osVersion))));
+    this.privReco = this.createServiceRecognizer(Recognizer.getAuthFromProperties(this.privProperties), this.privConnectionFactory, this.audioConfig, recognizerConfig);
+  }
+  recognizeOnceAsyncImpl(recognitionMode) {
+    return __awaiter$e(this, void 0, void 0, function* () {
+      Contracts.throwIfDisposed(this.privDisposed);
+      const ret = new Deferred();
+      yield this.implRecognizerStop();
+      yield this.privReco.recognize(recognitionMode, ret.resolve, ret.reject);
+      const result = yield ret.promise;
+      yield this.implRecognizerStop();
+      return result;
+    });
+  }
+  startContinuousRecognitionAsyncImpl(recognitionMode) {
+    return __awaiter$e(this, void 0, void 0, function* () {
+      Contracts.throwIfDisposed(this.privDisposed);
+      yield this.implRecognizerStop();
+      yield this.privReco.recognize(recognitionMode, void 0, void 0);
+    });
+  }
+  stopContinuousRecognitionAsyncImpl() {
+    return __awaiter$e(this, void 0, void 0, function* () {
+      Contracts.throwIfDisposed(this.privDisposed);
+      yield this.implRecognizerStop();
+    });
+  }
+  implRecognizerStop() {
+    return __awaiter$e(this, void 0, void 0, function* () {
+      if (this.privReco) {
+        yield this.privReco.stopRecognizing();
+      }
+      return;
+    });
+  }
+  static getAuthFromProperties(properties) {
+    const subscriptionKey = properties.getProperty(PropertyId.SpeechServiceConnection_Key, void 0);
+    const authentication = subscriptionKey && subscriptionKey !== "" ? new CognitiveSubscriptionKeyAuthentication(subscriptionKey) : new CognitiveTokenAuthentication(() => {
+      const authorizationToken = properties.getProperty(PropertyId.SpeechServiceAuthorization_Token, void 0);
+      return Promise.resolve(authorizationToken);
+    }, () => {
+      const authorizationToken = properties.getProperty(PropertyId.SpeechServiceAuthorization_Token, void 0);
+      return Promise.resolve(authorizationToken);
+    });
+    return authentication;
+  }
+}
+class ConnectionMessageImpl {
+  constructor(message) {
+    this.privConnectionMessage = message;
+    this.privProperties = new PropertyCollection();
+    if (!!this.privConnectionMessage.headers[HeaderNames.ConnectionId]) {
+      this.privProperties.setProperty(PropertyId.Speech_SessionId, this.privConnectionMessage.headers[HeaderNames.ConnectionId]);
+    }
+    Object.keys(this.privConnectionMessage.headers).forEach((header) => {
+      this.privProperties.setProperty(header, this.privConnectionMessage.headers[header]);
+    });
+  }
+  get path() {
+    return this.privConnectionMessage.headers[Object.keys(this.privConnectionMessage.headers).find((key) => key.toLowerCase() === "path".toLowerCase())];
+  }
+  get isTextMessage() {
+    return this.privConnectionMessage.messageType === MessageType.Text;
+  }
+  get isBinaryMessage() {
+    return this.privConnectionMessage.messageType === MessageType.Binary;
+  }
+  get TextMessage() {
+    return this.privConnectionMessage.textBody;
+  }
+  get binaryMessage() {
+    return this.privConnectionMessage.binaryBody;
+  }
+  get properties() {
+    return this.privProperties;
+  }
+  toString() {
+    return "";
+  }
+}
+class Connection {
+  static fromRecognizer(recognizer) {
+    const recoBase = recognizer.internalData;
+    const ret = new Connection();
+    ret.privInternalData = recoBase;
+    ret.setupEvents();
+    return ret;
+  }
+  static fromSynthesizer(synthesizer) {
+    const synthBase = synthesizer.internalData;
+    const ret = new Connection();
+    ret.privInternalData = synthBase;
+    ret.setupEvents();
+    return ret;
+  }
+  openConnection(cb, err) {
+    marshalPromiseToCallbacks(this.privInternalData.connect(), cb, err);
+  }
+  closeConnection(cb, err) {
+    if (this.privInternalData instanceof SynthesisAdapterBase) {
+      throw new Error("Disconnecting a synthesizer's connection is currently not supported");
+    } else {
+      marshalPromiseToCallbacks(this.privInternalData.disconnect(), cb, err);
+    }
+  }
+  setMessageProperty(path, propertyName, propertyValue) {
+    Contracts.throwIfNullOrWhitespace(propertyName, "propertyName");
+    if (this.privInternalData instanceof ServiceRecognizerBase) {
+      if (path.toLowerCase() !== "speech.context") {
+        throw new Error("Only speech.context message property sets are currently supported for recognizer");
+      } else {
+        this.privInternalData.speechContext.setSection(propertyName, propertyValue);
+      }
+    } else if (this.privInternalData instanceof SynthesisAdapterBase) {
+      if (path.toLowerCase() !== "synthesis.context") {
+        throw new Error("Only synthesis.context message property sets are currently supported for synthesizer");
+      } else {
+        this.privInternalData.synthesisContext.setSection(propertyName, propertyValue);
+      }
+    }
+  }
+  sendMessageAsync(path, payload, success, error) {
+    marshalPromiseToCallbacks(this.privInternalData.sendNetworkMessage(path, payload), success, error);
+  }
+  close() {
+  }
+  setupEvents() {
+    this.privEventListener = this.privInternalData.connectionEvents.attach((connectionEvent) => {
+      if (connectionEvent.name === "ConnectionEstablishedEvent") {
+        if (!!this.connected) {
+          this.connected(new ConnectionEventArgs(connectionEvent.connectionId));
+        }
+      } else if (connectionEvent.name === "ConnectionClosedEvent") {
+        if (!!this.disconnected) {
+          this.disconnected(new ConnectionEventArgs(connectionEvent.connectionId));
+        }
+      } else if (connectionEvent.name === "ConnectionMessageSentEvent") {
+        if (!!this.messageSent) {
+          this.messageSent(new ConnectionMessageEventArgs(new ConnectionMessageImpl(connectionEvent.message)));
+        }
+      } else if (connectionEvent.name === "ConnectionMessageReceivedEvent") {
+        if (!!this.messageReceived) {
+          this.messageReceived(new ConnectionMessageEventArgs(new ConnectionMessageImpl(connectionEvent.message)));
+        }
+      }
+    });
+    this.privServiceEventListener = this.privInternalData.serviceEvents.attach((e) => {
+      if (!!this.receivedServiceMessage) {
+        this.receivedServiceMessage(new ServiceEventArgs(e.jsonString, e.name));
+      }
+    });
+  }
+}
+var __awaiter$d = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
+    });
+  }
+  return new (P || (P = Promise))(function(resolve, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function step(result) {
+      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
+};
+class TranslationRecognizer extends Recognizer {
+  constructor(speechConfig, audioConfig) {
+    const configImpl = speechConfig;
+    Contracts.throwIfNull(configImpl, "speechConfig");
+    super(audioConfig, configImpl.properties, new TranslationConnectionFactory());
+    this.privDisposedTranslationRecognizer = false;
+    if (this.properties.getProperty(PropertyId.SpeechServiceConnection_TranslationVoice, void 0) !== void 0) {
+      Contracts.throwIfNullOrWhitespace(this.properties.getProperty(PropertyId.SpeechServiceConnection_TranslationVoice), PropertyId[PropertyId.SpeechServiceConnection_TranslationVoice]);
+    }
+    Contracts.throwIfNullOrWhitespace(this.properties.getProperty(PropertyId.SpeechServiceConnection_TranslationToLanguages), PropertyId[PropertyId.SpeechServiceConnection_TranslationToLanguages]);
+    Contracts.throwIfNullOrWhitespace(this.properties.getProperty(PropertyId.SpeechServiceConnection_RecoLanguage), PropertyId[PropertyId.SpeechServiceConnection_RecoLanguage]);
+  }
+  get speechRecognitionLanguage() {
+    Contracts.throwIfDisposed(this.privDisposedTranslationRecognizer);
+    return this.properties.getProperty(PropertyId.SpeechServiceConnection_RecoLanguage);
+  }
+  get targetLanguages() {
+    Contracts.throwIfDisposed(this.privDisposedTranslationRecognizer);
+    return this.properties.getProperty(PropertyId.SpeechServiceConnection_TranslationToLanguages).split(",");
+  }
+  get voiceName() {
+    Contracts.throwIfDisposed(this.privDisposedTranslationRecognizer);
+    return this.properties.getProperty(PropertyId.SpeechServiceConnection_TranslationVoice, void 0);
+  }
+  get properties() {
+    return this.privProperties;
+  }
+  get authorizationToken() {
+    return this.properties.getProperty(PropertyId.SpeechServiceAuthorization_Token);
+  }
+  set authorizationToken(value) {
+    this.properties.setProperty(PropertyId.SpeechServiceAuthorization_Token, value);
+  }
+  recognizeOnceAsync(cb, err) {
+    Contracts.throwIfDisposed(this.privDisposedTranslationRecognizer);
+    marshalPromiseToCallbacks(this.recognizeOnceAsyncImpl(RecognitionMode.Conversation), cb, err);
+  }
+  startContinuousRecognitionAsync(cb, err) {
+    marshalPromiseToCallbacks(this.startContinuousRecognitionAsyncImpl(RecognitionMode.Conversation), cb, err);
+  }
+  stopContinuousRecognitionAsync(cb, err) {
+    marshalPromiseToCallbacks(this.stopContinuousRecognitionAsyncImpl(), cb, err);
+  }
+  removeTargetLanguage(lang) {
+    Contracts.throwIfNullOrUndefined(lang, "language to be removed");
+    if (this.properties.getProperty(PropertyId.SpeechServiceConnection_TranslationToLanguages, void 0) !== void 0) {
+      const languages = this.properties.getProperty(PropertyId.SpeechServiceConnection_TranslationToLanguages).split(",");
+      const index = languages.indexOf(lang);
+      if (index > -1) {
+        languages.splice(index, 1);
+        this.properties.setProperty(PropertyId.SpeechServiceConnection_TranslationToLanguages, languages.join(","));
+        this.updateLanguages(languages);
+      }
+    }
+  }
+  addTargetLanguage(lang) {
+    Contracts.throwIfNullOrUndefined(lang, "language to be added");
+    let languages = [];
+    if (this.properties.getProperty(PropertyId.SpeechServiceConnection_TranslationToLanguages, void 0) !== void 0) {
+      languages = this.properties.getProperty(PropertyId.SpeechServiceConnection_TranslationToLanguages).split(",");
+      if (!languages.includes(lang)) {
+        languages.push(lang);
+        this.properties.setProperty(PropertyId.SpeechServiceConnection_TranslationToLanguages, languages.join(","));
+      }
+    } else {
+      this.properties.setProperty(PropertyId.SpeechServiceConnection_TranslationToLanguages, lang);
+      languages = [lang];
+    }
+    this.updateLanguages(languages);
+  }
+  close(cb, errorCb) {
+    Contracts.throwIfDisposed(this.privDisposedTranslationRecognizer);
+    marshalPromiseToCallbacks(this.dispose(true), cb, errorCb);
+  }
+  onConnection() {
+  }
+  onDisconnection() {
+    return __awaiter$d(this, void 0, void 0, function* () {
+    });
+  }
+  dispose(disposing) {
+    const _super = Object.create(null, {
+      dispose: { get: () => super.dispose }
+    });
+    return __awaiter$d(this, void 0, void 0, function* () {
+      if (this.privDisposedTranslationRecognizer) {
+        return;
+      }
+      this.privDisposedTranslationRecognizer = true;
+      if (disposing) {
+        yield this.implRecognizerStop();
+        yield _super.dispose.call(this, disposing);
+      }
+    });
+  }
+  createRecognizerConfig(speechConfig) {
+    return new RecognizerConfig(speechConfig, this.properties);
+  }
+  createServiceRecognizer(authentication, connectionFactory, audioConfig, recognizerConfig) {
+    const configImpl = audioConfig;
+    return new TranslationServiceRecognizer(authentication, connectionFactory, configImpl, recognizerConfig, this);
+  }
+  updateLanguages(languages) {
+    const conn = Connection.fromRecognizer(this);
+    if (!!conn) {
+      conn.setMessageProperty("speech.context", "translationcontext", { to: languages });
+      conn.sendMessageAsync("event", JSON.stringify({
+        id: "translation",
+        name: "updateLanguage",
+        to: languages
+      }));
+    }
+  }
+}
+class Translations {
+  constructor() {
+    this.privMap = new PropertyCollection();
+  }
+  get languages() {
+    return this.privMap.keys;
+  }
+  get(key, def) {
+    return this.privMap.getProperty(key, def);
+  }
+  set(key, value) {
+    this.privMap.setProperty(key, value);
+  }
+}
+class TranslationRecognitionCanceledEventArgs {
+  constructor(sessionid, cancellationReason, errorDetails, errorCode, result) {
+    this.privCancelReason = cancellationReason;
+    this.privErrorDetails = errorDetails;
+    this.privResult = result;
+    this.privSessionId = sessionid;
+    this.privErrorCode = errorCode;
+  }
+  get result() {
+    return this.privResult;
+  }
+  get sessionId() {
+    return this.privSessionId;
+  }
+  get reason() {
+    return this.privCancelReason;
+  }
+  get errorCode() {
+    return this.privErrorCode;
+  }
+  get errorDetails() {
+    return this.privErrorDetails;
+  }
+}
 var CancellationErrorCode;
 (function(CancellationErrorCode2) {
   CancellationErrorCode2[CancellationErrorCode2["NoError"] = 0] = "NoError";
@@ -2398,6 +3162,21 @@ var CancellationErrorCode;
   CancellationErrorCode2[CancellationErrorCode2["RuntimeError"] = 7] = "RuntimeError";
   CancellationErrorCode2[CancellationErrorCode2["Forbidden"] = 8] = "Forbidden";
 })(CancellationErrorCode || (CancellationErrorCode = {}));
+class ConnectionEventArgs extends SessionEventArgs {
+}
+class ServiceEventArgs extends SessionEventArgs {
+  constructor(json, name, sessionId) {
+    super(sessionId);
+    this.privJsonResult = json;
+    this.privEventName = name;
+  }
+  get jsonString() {
+    return this.privJsonResult;
+  }
+  get eventName() {
+    return this.privEventName;
+  }
+}
 class QueryParameterNames {
 }
 QueryParameterNames.BotId = "botid";
@@ -2461,7 +3240,18 @@ var ProfanityOption;
   ProfanityOption2[ProfanityOption2["Removed"] = 1] = "Removed";
   ProfanityOption2[ProfanityOption2["Raw"] = 2] = "Raw";
 })(ProfanityOption || (ProfanityOption = {}));
-var __awaiter$9 = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
+class ConnectionMessageEventArgs {
+  constructor(message) {
+    this.privConnectionMessage = message;
+  }
+  get message() {
+    return this.privConnectionMessage;
+  }
+  toString() {
+    return "Message: " + this.privConnectionMessage.toString();
+  }
+}
+var __awaiter$c = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
   function adopt(value) {
     return value instanceof P ? value : new P(function(resolve) {
       resolve(value);
@@ -2677,7 +3467,7 @@ class SpeechSynthesizer {
     this.speakImpl(ssml, true, cb, err, stream);
   }
   getVoicesAsync(locale = "") {
-    return __awaiter$9(this, void 0, void 0, function* () {
+    return __awaiter$c(this, void 0, void 0, function* () {
       return this.getVoices(locale);
     });
   }
@@ -2689,7 +3479,7 @@ class SpeechSynthesizer {
     return this.privAdapter;
   }
   dispose(disposing) {
-    return __awaiter$9(this, void 0, void 0, function* () {
+    return __awaiter$c(this, void 0, void 0, function* () {
       if (this.privDisposed) {
         return;
       }
@@ -2778,7 +3568,7 @@ class SpeechSynthesizer {
     }
   }
   getVoices(locale) {
-    return __awaiter$9(this, void 0, void 0, function* () {
+    return __awaiter$c(this, void 0, void 0, function* () {
       const requestId = createNoDashGuid();
       const response = yield this.privRestAdapter.getVoicesList(requestId);
       if (response.ok && Array.isArray(response.json)) {
@@ -2793,7 +3583,7 @@ class SpeechSynthesizer {
     });
   }
   adapterSpeak() {
-    return __awaiter$9(this, void 0, void 0, function* () {
+    return __awaiter$c(this, void 0, void 0, function* () {
       if (!this.privDisposed && !this.privSynthesizing) {
         this.privSynthesizing = true;
         const request = yield this.synthesisRequestQueue.dequeue();
@@ -2984,7 +3774,7 @@ class VoiceInfo {
     return this.privVoicePath;
   }
 }
-var __awaiter$8 = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
+var __awaiter$b = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
   function adopt(value) {
     return value instanceof P ? value : new P(function(resolve) {
       resolve(value);
@@ -3189,7 +3979,7 @@ class SpeakerAudioDestination {
     return this.privAudio;
   }
   updateSourceBuffer() {
-    return __awaiter$8(this, void 0, void 0, function* () {
+    return __awaiter$b(this, void 0, void 0, function* () {
       if (this.privAudioBuffer !== void 0 && this.privAudioBuffer.length > 0 && this.sourceBufferAvailable()) {
         this.privAppendingToBuffer = true;
         const binary = this.privAudioBuffer.shift();
@@ -3207,7 +3997,7 @@ class SpeakerAudioDestination {
     });
   }
   handleSourceBufferUpdateEnd() {
-    return __awaiter$8(this, void 0, void 0, function* () {
+    return __awaiter$b(this, void 0, void 0, function* () {
       if (this.canEndStream() && this.sourceBufferAvailable()) {
         this.privMediaSource.endOfStream();
         yield this.notifyPlayback();
@@ -3215,7 +4005,7 @@ class SpeakerAudioDestination {
     });
   }
   notifyPlayback() {
-    return __awaiter$8(this, void 0, void 0, function* () {
+    return __awaiter$b(this, void 0, void 0, function* () {
       if (!this.privPlaybackStarted && this.privAudio !== void 0) {
         this.privPlaybackStarted = true;
         if (!!this.onAudioStart) {
@@ -3239,6 +4029,84 @@ class SpeakerAudioDestination {
     return this.privSourceBuffer !== void 0 && !this.privSourceBuffer.updating;
   }
 }
+class SpeechRecognitionEvent extends PlatformEvent {
+  constructor(eventName, requestId, sessionId, eventType = EventType.Info) {
+    super(eventName, eventType);
+    this.privRequestId = requestId;
+    this.privSessionId = sessionId;
+  }
+  get requestId() {
+    return this.privRequestId;
+  }
+  get sessionId() {
+    return this.privSessionId;
+  }
+}
+class RecognitionTriggeredEvent extends SpeechRecognitionEvent {
+  constructor(requestId, sessionId, audioSourceId, audioNodeId) {
+    super("RecognitionTriggeredEvent", requestId, sessionId);
+    this.privAudioSourceId = audioSourceId;
+    this.privAudioNodeId = audioNodeId;
+  }
+  get audioSourceId() {
+    return this.privAudioSourceId;
+  }
+  get audioNodeId() {
+    return this.privAudioNodeId;
+  }
+}
+class ListeningStartedEvent extends SpeechRecognitionEvent {
+  constructor(requestId, sessionId, audioSourceId, audioNodeId) {
+    super("ListeningStartedEvent", requestId, sessionId);
+    this.privAudioSourceId = audioSourceId;
+    this.privAudioNodeId = audioNodeId;
+  }
+  get audioSourceId() {
+    return this.privAudioSourceId;
+  }
+  get audioNodeId() {
+    return this.privAudioNodeId;
+  }
+}
+class ConnectingToServiceEvent extends SpeechRecognitionEvent {
+  constructor(requestId, authFetchEventid, sessionId) {
+    super("ConnectingToServiceEvent", requestId, sessionId);
+    this.privAuthFetchEventid = authFetchEventid;
+  }
+  get authFetchEventid() {
+    return this.privAuthFetchEventid;
+  }
+}
+class RecognitionStartedEvent extends SpeechRecognitionEvent {
+  constructor(requestId, audioSourceId, audioNodeId, authFetchEventId, sessionId) {
+    super("RecognitionStartedEvent", requestId, sessionId);
+    this.privAudioSourceId = audioSourceId;
+    this.privAudioNodeId = audioNodeId;
+    this.privAuthFetchEventId = authFetchEventId;
+  }
+  get audioSourceId() {
+    return this.privAudioSourceId;
+  }
+  get audioNodeId() {
+    return this.privAudioNodeId;
+  }
+  get authFetchEventId() {
+    return this.privAuthFetchEventId;
+  }
+}
+var RecognitionCompletionStatus;
+(function(RecognitionCompletionStatus2) {
+  RecognitionCompletionStatus2[RecognitionCompletionStatus2["Success"] = 0] = "Success";
+  RecognitionCompletionStatus2[RecognitionCompletionStatus2["AudioSourceError"] = 1] = "AudioSourceError";
+  RecognitionCompletionStatus2[RecognitionCompletionStatus2["AudioSourceTimeout"] = 2] = "AudioSourceTimeout";
+  RecognitionCompletionStatus2[RecognitionCompletionStatus2["AuthTokenFetchError"] = 3] = "AuthTokenFetchError";
+  RecognitionCompletionStatus2[RecognitionCompletionStatus2["AuthTokenFetchTimeout"] = 4] = "AuthTokenFetchTimeout";
+  RecognitionCompletionStatus2[RecognitionCompletionStatus2["UnAuthorized"] = 5] = "UnAuthorized";
+  RecognitionCompletionStatus2[RecognitionCompletionStatus2["ConnectTimeout"] = 6] = "ConnectTimeout";
+  RecognitionCompletionStatus2[RecognitionCompletionStatus2["ConnectError"] = 7] = "ConnectError";
+  RecognitionCompletionStatus2[RecognitionCompletionStatus2["ClientRecognitionActivityTimeout"] = 8] = "ClientRecognitionActivityTimeout";
+  RecognitionCompletionStatus2[RecognitionCompletionStatus2["UnknownError"] = 9] = "UnknownError";
+})(RecognitionCompletionStatus || (RecognitionCompletionStatus = {}));
 class SpeechConnectionMessage extends ConnectionMessage {
   constructor(messageType, path, requestId, contentType, body, streamId, additionalHeaders, id) {
     if (!path) {
@@ -3316,6 +4184,564 @@ class SpeechConnectionMessage extends ConnectionMessage {
     return new SpeechConnectionMessage(message.messageType, path, requestId, contentType, message.body, streamId, additionalHeaders, message.id);
   }
 }
+var __awaiter$a = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
+    });
+  }
+  return new (P || (P = Promise))(function(resolve, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function step(result) {
+      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
+};
+class ServiceRecognizerBase {
+  constructor(authentication, connectionFactory, audioSource, recognizerConfig, recognizer) {
+    this.privConnectionConfigurationPromise = void 0;
+    this.privConnectionPromise = void 0;
+    this.privSetTimeout = setTimeout;
+    this.privIsLiveAudio = false;
+    this.recognizeOverride = void 0;
+    this.disconnectOverride = void 0;
+    this.receiveMessageOverride = void 0;
+    this.sendPrePayloadJSONOverride = void 0;
+    this.postConnectImplOverride = void 0;
+    this.configConnectionOverride = void 0;
+    if (!authentication) {
+      throw new ArgumentNullError("authentication");
+    }
+    if (!connectionFactory) {
+      throw new ArgumentNullError("connectionFactory");
+    }
+    if (!audioSource) {
+      throw new ArgumentNullError("audioSource");
+    }
+    if (!recognizerConfig) {
+      throw new ArgumentNullError("recognizerConfig");
+    }
+    this.privMustReportEndOfStream = false;
+    this.privAuthentication = authentication;
+    this.privConnectionFactory = connectionFactory;
+    this.privAudioSource = audioSource;
+    this.privRecognizerConfig = recognizerConfig;
+    this.privIsDisposed = false;
+    this.privRecognizer = recognizer;
+    this.privRequestSession = new RequestSession(this.privAudioSource.id());
+    this.privConnectionEvents = new EventSource();
+    this.privServiceEvents = new EventSource();
+    this.privDynamicGrammar = new DynamicGrammarBuilder();
+    this.privSpeechContext = new SpeechContext(this.privDynamicGrammar);
+    this.privAgentConfig = new AgentConfig();
+    if (typeof Blob !== "undefined" && typeof Worker !== "undefined") {
+      this.privSetTimeout = Timeout.setTimeout;
+    }
+    this.connectionEvents.attach((connectionEvent) => {
+      if (connectionEvent.name === "ConnectionClosedEvent") {
+        const connectionClosedEvent = connectionEvent;
+        if (connectionClosedEvent.statusCode === 1003 || connectionClosedEvent.statusCode === 1007 || connectionClosedEvent.statusCode === 1002 || connectionClosedEvent.statusCode === 4e3 || this.privRequestSession.numConnectionAttempts > this.privRecognizerConfig.maxRetryCount) {
+          void this.cancelRecognitionLocal(CancellationReason.Error, connectionClosedEvent.statusCode === 1007 ? CancellationErrorCode.BadRequestParameters : CancellationErrorCode.ConnectionFailure, `${connectionClosedEvent.reason} websocket error code: ${connectionClosedEvent.statusCode}`);
+        }
+      }
+    });
+  }
+  get audioSource() {
+    return this.privAudioSource;
+  }
+  get speechContext() {
+    return this.privSpeechContext;
+  }
+  get dynamicGrammar() {
+    return this.privDynamicGrammar;
+  }
+  get agentConfig() {
+    return this.privAgentConfig;
+  }
+  set conversationTranslatorToken(token) {
+    this.privRecognizerConfig.parameters.setProperty(PropertyId.ConversationTranslator_Token, token);
+  }
+  set authentication(auth) {
+    this.privAuthentication = this.authentication;
+  }
+  isDisposed() {
+    return this.privIsDisposed;
+  }
+  dispose(reason) {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      this.privIsDisposed = true;
+      if (this.privConnectionConfigurationPromise !== void 0) {
+        try {
+          const connection = yield this.privConnectionConfigurationPromise;
+          yield connection.dispose(reason);
+        } catch (error) {
+          return;
+        }
+      }
+    });
+  }
+  get connectionEvents() {
+    return this.privConnectionEvents;
+  }
+  get serviceEvents() {
+    return this.privServiceEvents;
+  }
+  get recognitionMode() {
+    return this.privRecognizerConfig.recognitionMode;
+  }
+  recognize(recoMode, successCallback, errorCallBack) {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      if (this.recognizeOverride !== void 0) {
+        yield this.recognizeOverride(recoMode, successCallback, errorCallBack);
+        return;
+      }
+      this.privConnectionConfigurationPromise = void 0;
+      this.privRecognizerConfig.recognitionMode = recoMode;
+      this.privSuccessCallback = successCallback;
+      this.privErrorCallback = errorCallBack;
+      this.privRequestSession.startNewRecognition();
+      this.privRequestSession.listenForServiceTelemetry(this.privAudioSource.events);
+      const conPromise = this.connectImpl();
+      let audioNode;
+      try {
+        const audioStreamNode = yield this.audioSource.attach(this.privRequestSession.audioNodeId);
+        const format = yield this.audioSource.format;
+        const deviceInfo = yield this.audioSource.deviceInfo;
+        this.privIsLiveAudio = deviceInfo.type && deviceInfo.type === type.Microphones;
+        audioNode = new ReplayableAudioNode(audioStreamNode, format.avgBytesPerSec);
+        yield this.privRequestSession.onAudioSourceAttachCompleted(audioNode, false);
+        this.privRecognizerConfig.SpeechServiceConfig.Context.audio = { source: deviceInfo };
+      } catch (error) {
+        yield this.privRequestSession.onStopRecognizing();
+        throw error;
+      }
+      try {
+        yield conPromise;
+      } catch (error) {
+        yield this.cancelRecognitionLocal(CancellationReason.Error, CancellationErrorCode.ConnectionFailure, error);
+        return;
+      }
+      const sessionStartEventArgs = new SessionEventArgs(this.privRequestSession.sessionId);
+      if (!!this.privRecognizer.sessionStarted) {
+        this.privRecognizer.sessionStarted(this.privRecognizer, sessionStartEventArgs);
+      }
+      void this.receiveMessage();
+      const audioSendPromise = this.sendAudio(audioNode);
+      audioSendPromise.catch((error) => __awaiter$a(this, void 0, void 0, function* () {
+        yield this.cancelRecognitionLocal(CancellationReason.Error, CancellationErrorCode.RuntimeError, error);
+      }));
+      return;
+    });
+  }
+  stopRecognizing() {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      if (this.privRequestSession.isRecognizing) {
+        try {
+          yield this.audioSource.turnOff();
+          yield this.sendFinalAudio();
+          yield this.privRequestSession.onStopRecognizing();
+          yield this.privRequestSession.turnCompletionPromise;
+        } finally {
+          yield this.privRequestSession.dispose();
+        }
+      }
+      return;
+    });
+  }
+  connect() {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      yield this.connectImpl();
+      return Promise.resolve();
+    });
+  }
+  connectAsync(cb, err) {
+    this.connectImpl().then(() => {
+      try {
+        if (!!cb) {
+          cb();
+        }
+      } catch (e) {
+        if (!!err) {
+          err(e);
+        }
+      }
+    }, (reason) => {
+      try {
+        if (!!err) {
+          err(reason);
+        }
+      } catch (error) {
+      }
+    });
+  }
+  disconnect() {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      yield this.cancelRecognitionLocal(CancellationReason.Error, CancellationErrorCode.NoError, "Disconnecting");
+      if (this.disconnectOverride !== void 0) {
+        yield this.disconnectOverride();
+      }
+      if (this.privConnectionPromise !== void 0) {
+        try {
+          yield (yield this.privConnectionPromise).dispose();
+        } catch (error) {
+        }
+      }
+      this.privConnectionPromise = void 0;
+    });
+  }
+  sendMessage(message) {
+    return;
+  }
+  sendNetworkMessage(path, payload) {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      const type2 = typeof payload === "string" ? MessageType.Text : MessageType.Binary;
+      const contentType = typeof payload === "string" ? "application/json" : "";
+      const connection = yield this.fetchConnection();
+      return connection.send(new SpeechConnectionMessage(type2, path, this.privRequestSession.requestId, contentType, payload));
+    });
+  }
+  set activityTemplate(messagePayload) {
+    this.privActivityTemplate = messagePayload;
+  }
+  get activityTemplate() {
+    return this.privActivityTemplate;
+  }
+  sendTelemetryData() {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      const telemetryData = this.privRequestSession.getTelemetry();
+      if (ServiceRecognizerBase.telemetryDataEnabled !== true || this.privIsDisposed || null === telemetryData) {
+        return;
+      }
+      if (!!ServiceRecognizerBase.telemetryData) {
+        try {
+          ServiceRecognizerBase.telemetryData(telemetryData);
+        } catch (_a) {
+        }
+      }
+      const connection = yield this.fetchConnection();
+      yield connection.send(new SpeechConnectionMessage(MessageType.Text, "telemetry", this.privRequestSession.requestId, "application/json", telemetryData));
+    });
+  }
+  cancelRecognitionLocal(cancellationReason, errorCode, error) {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      if (!!this.privRequestSession.isRecognizing) {
+        yield this.privRequestSession.onStopRecognizing();
+        this.cancelRecognition(this.privRequestSession.sessionId, this.privRequestSession.requestId, cancellationReason, errorCode, error);
+      }
+    });
+  }
+  receiveMessage() {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      try {
+        if (this.privIsDisposed) {
+          return;
+        }
+        let connection = yield this.fetchConnection();
+        const message = yield connection.read();
+        if (this.receiveMessageOverride !== void 0) {
+          return this.receiveMessageOverride();
+        }
+        if (!message) {
+          if (!this.privRequestSession.isRecognizing) {
+            return;
+          } else {
+            return this.receiveMessage();
+          }
+        }
+        this.privServiceHasSentMessage = true;
+        const connectionMessage = SpeechConnectionMessage.fromConnectionMessage(message);
+        if (connectionMessage.requestId.toLowerCase() === this.privRequestSession.requestId.toLowerCase()) {
+          switch (connectionMessage.path.toLowerCase()) {
+            case "turn.start":
+              this.privMustReportEndOfStream = true;
+              this.privRequestSession.onServiceTurnStartResponse();
+              break;
+            case "speech.startdetected":
+              const speechStartDetected = SpeechDetected.fromJSON(connectionMessage.textBody);
+              const speechStartEventArgs = new RecognitionEventArgs(speechStartDetected.Offset, this.privRequestSession.sessionId);
+              if (!!this.privRecognizer.speechStartDetected) {
+                this.privRecognizer.speechStartDetected(this.privRecognizer, speechStartEventArgs);
+              }
+              break;
+            case "speech.enddetected":
+              let json;
+              if (connectionMessage.textBody.length > 0) {
+                json = connectionMessage.textBody;
+              } else {
+                json = "{ Offset: 0 }";
+              }
+              const speechStopDetected = SpeechDetected.fromJSON(json);
+              if (this.privRecognizerConfig.isContinuousRecognition) {
+                this.privRequestSession.onServiceRecognized(speechStopDetected.Offset + this.privRequestSession.currentTurnAudioOffset);
+              }
+              const speechStopEventArgs = new RecognitionEventArgs(speechStopDetected.Offset + this.privRequestSession.currentTurnAudioOffset, this.privRequestSession.sessionId);
+              if (!!this.privRecognizer.speechEndDetected) {
+                this.privRecognizer.speechEndDetected(this.privRecognizer, speechStopEventArgs);
+              }
+              break;
+            case "turn.end":
+              yield this.sendTelemetryData();
+              if (this.privRequestSession.isSpeechEnded && this.privMustReportEndOfStream) {
+                this.privMustReportEndOfStream = false;
+                yield this.cancelRecognitionLocal(CancellationReason.EndOfStream, CancellationErrorCode.NoError, void 0);
+              }
+              const sessionStopEventArgs = new SessionEventArgs(this.privRequestSession.sessionId);
+              yield this.privRequestSession.onServiceTurnEndResponse(this.privRecognizerConfig.isContinuousRecognition);
+              if (!this.privRecognizerConfig.isContinuousRecognition || this.privRequestSession.isSpeechEnded || !this.privRequestSession.isRecognizing) {
+                if (!!this.privRecognizer.sessionStopped) {
+                  this.privRecognizer.sessionStopped(this.privRecognizer, sessionStopEventArgs);
+                }
+                return;
+              } else {
+                connection = yield this.fetchConnection();
+                yield this.sendPrePayloadJSON(connection);
+              }
+              break;
+            default:
+              if (!(yield this.processTypeSpecificMessages(connectionMessage))) {
+                if (!!this.privServiceEvents) {
+                  this.serviceEvents.onEvent(new ServiceEvent(connectionMessage.path.toLowerCase(), connectionMessage.textBody));
+                }
+              }
+          }
+        }
+        return this.receiveMessage();
+      } catch (error) {
+        return null;
+      }
+    });
+  }
+  sendSpeechContext(connection, generateNewRequestId) {
+    const speechContextJson = this.speechContext.toJSON();
+    if (generateNewRequestId) {
+      this.privRequestSession.onSpeechContext();
+    }
+    if (speechContextJson) {
+      return connection.send(new SpeechConnectionMessage(MessageType.Text, "speech.context", this.privRequestSession.requestId, "application/json", speechContextJson));
+    }
+    return;
+  }
+  sendPrePayloadJSON(connection, generateNewRequestId = true) {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      if (this.sendPrePayloadJSONOverride !== void 0) {
+        return this.sendPrePayloadJSONOverride(connection);
+      }
+      yield this.sendSpeechContext(connection, generateNewRequestId);
+      yield this.sendWaveHeader(connection);
+      return;
+    });
+  }
+  sendWaveHeader(connection) {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      const format = yield this.audioSource.format;
+      return connection.send(new SpeechConnectionMessage(MessageType.Binary, "audio", this.privRequestSession.requestId, "audio/x-wav", format.header));
+    });
+  }
+  connectImpl() {
+    if (this.privConnectionPromise !== void 0) {
+      return this.privConnectionPromise.then((connection) => {
+        if (connection.state() === ConnectionState.Disconnected) {
+          this.privConnectionId = null;
+          this.privConnectionPromise = void 0;
+          this.privServiceHasSentMessage = false;
+          return this.connectImpl();
+        }
+        return this.privConnectionPromise;
+      }, () => {
+        this.privConnectionId = null;
+        this.privConnectionPromise = void 0;
+        this.privServiceHasSentMessage = false;
+        return this.connectImpl();
+      });
+    }
+    this.privConnectionPromise = this.retryableConnect();
+    this.privConnectionPromise.catch(() => {
+    });
+    if (this.postConnectImplOverride !== void 0) {
+      return this.postConnectImplOverride(this.privConnectionPromise);
+    }
+    return this.privConnectionPromise;
+  }
+  sendSpeechServiceConfig(connection, requestSession, SpeechServiceConfigJson) {
+    requestSession.onSpeechContext();
+    if (ServiceRecognizerBase.telemetryDataEnabled !== true) {
+      const withTelemetry = JSON.parse(SpeechServiceConfigJson);
+      const replacement = {
+        context: {
+          system: withTelemetry.context.system
+        }
+      };
+      SpeechServiceConfigJson = JSON.stringify(replacement);
+    }
+    if (this.privRecognizerConfig.parameters.getProperty("TranscriptionService_SingleChannel", "false").toLowerCase() === "true") {
+      const json = JSON.parse(SpeechServiceConfigJson);
+      json.context.DisableReferenceChannel = "True";
+      json.context.MicSpec = "1_0_0";
+      SpeechServiceConfigJson = JSON.stringify(json);
+    }
+    if (SpeechServiceConfigJson) {
+      return connection.send(new SpeechConnectionMessage(MessageType.Text, "speech.config", requestSession.requestId, "application/json", SpeechServiceConfigJson));
+    }
+    return;
+  }
+  fetchConnection() {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      if (this.privConnectionConfigurationPromise !== void 0) {
+        return this.privConnectionConfigurationPromise.then((connection) => {
+          if (connection.state() === ConnectionState.Disconnected) {
+            this.privConnectionId = null;
+            this.privConnectionConfigurationPromise = void 0;
+            this.privServiceHasSentMessage = false;
+            return this.fetchConnection();
+          }
+          return this.privConnectionConfigurationPromise;
+        }, () => {
+          this.privConnectionId = null;
+          this.privConnectionConfigurationPromise = void 0;
+          this.privServiceHasSentMessage = false;
+          return this.fetchConnection();
+        });
+      }
+      this.privConnectionConfigurationPromise = this.configureConnection();
+      return yield this.privConnectionConfigurationPromise;
+    });
+  }
+  sendAudio(audioStreamNode) {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      const audioFormat = yield this.audioSource.format;
+      let nextSendTime = Date.now();
+      const fastLaneSizeMs = this.privRecognizerConfig.parameters.getProperty("SPEECH-TransmitLengthBeforThrottleMs", "5000");
+      const maxSendUnthrottledBytes = audioFormat.avgBytesPerSec / 1e3 * parseInt(fastLaneSizeMs, 10);
+      const startRecogNumber = this.privRequestSession.recogNumber;
+      const readAndUploadCycle = () => __awaiter$a(this, void 0, void 0, function* () {
+        if (!this.privIsDisposed && !this.privRequestSession.isSpeechEnded && this.privRequestSession.isRecognizing && this.privRequestSession.recogNumber === startRecogNumber) {
+          const connection = yield this.fetchConnection();
+          const audioStreamChunk = yield audioStreamNode.read();
+          if (this.privRequestSession.isSpeechEnded) {
+            return;
+          }
+          let payload;
+          let sendDelay;
+          if (!audioStreamChunk || audioStreamChunk.isEnd) {
+            payload = null;
+            sendDelay = 0;
+          } else {
+            payload = audioStreamChunk.buffer;
+            this.privRequestSession.onAudioSent(payload.byteLength);
+            if (maxSendUnthrottledBytes >= this.privRequestSession.bytesSent) {
+              sendDelay = 0;
+            } else {
+              sendDelay = Math.max(0, nextSendTime - Date.now());
+            }
+          }
+          if (0 !== sendDelay) {
+            yield this.delay(sendDelay);
+          }
+          if (payload !== null) {
+            nextSendTime = Date.now() + payload.byteLength * 1e3 / (audioFormat.avgBytesPerSec * 2);
+          }
+          if (!this.privIsDisposed && !this.privRequestSession.isSpeechEnded && this.privRequestSession.isRecognizing && this.privRequestSession.recogNumber === startRecogNumber) {
+            connection.send(new SpeechConnectionMessage(MessageType.Binary, "audio", this.privRequestSession.requestId, null, payload)).catch(() => {
+              this.privRequestSession.onServiceTurnEndResponse(this.privRecognizerConfig.isContinuousRecognition).catch(() => {
+              });
+            });
+            if (!(audioStreamChunk === null || audioStreamChunk === void 0 ? void 0 : audioStreamChunk.isEnd)) {
+              return readAndUploadCycle();
+            } else {
+              if (!this.privIsLiveAudio) {
+                this.privRequestSession.onSpeechEnded();
+              }
+            }
+          }
+        }
+      });
+      return readAndUploadCycle();
+    });
+  }
+  retryableConnect() {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      let isUnAuthorized = false;
+      this.privAuthFetchEventId = createNoDashGuid();
+      const sessionId = this.privRequestSession.sessionId;
+      this.privConnectionId = sessionId !== void 0 ? sessionId : createNoDashGuid();
+      this.privRequestSession.onPreConnectionStart(this.privAuthFetchEventId, this.privConnectionId);
+      let lastStatusCode = 0;
+      let lastReason = "";
+      while (this.privRequestSession.numConnectionAttempts <= this.privRecognizerConfig.maxRetryCount) {
+        const authPromise = isUnAuthorized ? this.privAuthentication.fetchOnExpiry(this.privAuthFetchEventId) : this.privAuthentication.fetch(this.privAuthFetchEventId);
+        const auth = yield authPromise;
+        yield this.privRequestSession.onAuthCompleted(false);
+        const connection = this.privConnectionFactory.create(this.privRecognizerConfig, auth, this.privConnectionId);
+        this.privRequestSession.listenForServiceTelemetry(connection.events);
+        connection.events.attach((event) => {
+          this.connectionEvents.onEvent(event);
+        });
+        const response = yield connection.open();
+        if (response.statusCode === 200) {
+          yield this.privRequestSession.onConnectionEstablishCompleted(response.statusCode);
+          return Promise.resolve(connection);
+        } else if (response.statusCode === 1006) {
+          isUnAuthorized = true;
+        }
+        lastStatusCode = response.statusCode;
+        lastReason = response.reason;
+        this.privRequestSession.onRetryConnection();
+      }
+      yield this.privRequestSession.onConnectionEstablishCompleted(lastStatusCode, lastReason);
+      return Promise.reject(`Unable to contact server. StatusCode: ${lastStatusCode}, ${this.privRecognizerConfig.parameters.getProperty(PropertyId.SpeechServiceConnection_Endpoint)} Reason: ${lastReason}`);
+    });
+  }
+  delay(delayMs) {
+    return new Promise((resolve) => this.privSetTimeout(resolve, delayMs));
+  }
+  writeBufferToConsole(buffer) {
+    let out = "Buffer Size: ";
+    if (null === buffer) {
+      out += "null";
+    } else {
+      const readView = new Uint8Array(buffer);
+      out += `${buffer.byteLength}\r
+`;
+      for (let i = 0; i < buffer.byteLength; i++) {
+        out += readView[i].toString(16).padStart(2, "0") + " ";
+      }
+    }
+    console.info(out);
+  }
+  sendFinalAudio() {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      const connection = yield this.fetchConnection();
+      yield connection.send(new SpeechConnectionMessage(MessageType.Binary, "audio", this.privRequestSession.requestId, null, null));
+      return;
+    });
+  }
+  configureConnection() {
+    return __awaiter$a(this, void 0, void 0, function* () {
+      const connection = yield this.connectImpl();
+      if (this.configConnectionOverride !== void 0) {
+        return this.configConnectionOverride(connection);
+      }
+      yield this.sendSpeechServiceConfig(connection, this.privRequestSession, this.privRecognizerConfig.SpeechServiceConfig.serialize());
+      yield this.sendPrePayloadJSON(connection, false);
+      return connection;
+    });
+  }
+}
+ServiceRecognizerBase.telemetryDataEnabled = true;
 var RecognitionMode;
 (function(RecognitionMode2) {
   RecognitionMode2[RecognitionMode2["Interactive"] = 0] = "Interactive";
@@ -3327,6 +4753,70 @@ var SpeechResultFormat;
   SpeechResultFormat2[SpeechResultFormat2["Simple"] = 0] = "Simple";
   SpeechResultFormat2[SpeechResultFormat2["Detailed"] = 1] = "Detailed";
 })(SpeechResultFormat || (SpeechResultFormat = {}));
+class RecognizerConfig {
+  constructor(speechServiceConfig, parameters) {
+    this.privSpeechServiceConfig = speechServiceConfig ? speechServiceConfig : new SpeechServiceConfig(new Context(null));
+    this.privParameters = parameters;
+    this.privMaxRetryCount = parseInt(parameters.getProperty("SPEECH-Error-MaxRetryCount", "4"), 10);
+    this.privLanguageIdPriority = parameters.getProperty(PropertyId.SpeechServiceConnection_ContinuousLanguageIdPriority, void 0);
+    this.privLanguageIdMode = this.privLanguageIdPriority === "Latency" ? "DetectContinuous" : "DetectAtAudioStart";
+    if (this.privLanguageIdMode === "DetectAtAudioStart") {
+      this.privLanguageIdPriority = parameters.getProperty(PropertyId.SpeechServiceConnection_AtStartLanguageIdPriority, void 0);
+    }
+  }
+  get parameters() {
+    return this.privParameters;
+  }
+  get recognitionMode() {
+    return this.privRecognitionMode;
+  }
+  set recognitionMode(value) {
+    this.privRecognitionMode = value;
+    this.privRecognitionActivityTimeout = value === RecognitionMode.Interactive ? 8e3 : 25e3;
+    this.privSpeechServiceConfig.Recognition = RecognitionMode[value];
+  }
+  get SpeechServiceConfig() {
+    return this.privSpeechServiceConfig;
+  }
+  get recognitionActivityTimeout() {
+    return this.privRecognitionActivityTimeout;
+  }
+  get isContinuousRecognition() {
+    return this.privRecognitionMode !== RecognitionMode.Interactive;
+  }
+  get languageIdPriority() {
+    return !!this.privLanguageIdPriority ? `Prioritize${this.privLanguageIdPriority}` : "";
+  }
+  get languageIdMode() {
+    return this.privLanguageIdMode;
+  }
+  get autoDetectSourceLanguages() {
+    return this.parameters.getProperty(PropertyId.SpeechServiceConnection_AutoDetectSourceLanguages, void 0);
+  }
+  get recognitionEndpointVersion() {
+    return this.parameters.getProperty(PropertyId.SpeechServiceConnection_RecognitionEndpointVersion, void 0);
+  }
+  get sourceLanguageModels() {
+    const models = [];
+    let modelsExist = false;
+    if (this.autoDetectSourceLanguages !== void 0) {
+      for (const language of this.autoDetectSourceLanguages.split(",")) {
+        const customProperty = language + PropertyId.SpeechServiceConnection_EndpointId.toString();
+        const modelId = this.parameters.getProperty(customProperty, void 0);
+        if (modelId !== void 0) {
+          models.push({ language, endpoint: modelId });
+          modelsExist = true;
+        } else {
+          models.push({ language, endpoint: "" });
+        }
+      }
+    }
+    return modelsExist ? models : void 0;
+  }
+  get maxRetryCount() {
+    return this.privMaxRetryCount;
+  }
+}
 class SpeechServiceConfig {
   constructor(context) {
     this.context = context;
@@ -3511,6 +5001,37 @@ class WebsocketMessageFormatter {
     return buffer;
   }
 }
+class TranslationConnectionFactory extends ConnectionFactoryBase {
+  create(config, authInfo, connectionId) {
+    let endpoint = config.parameters.getProperty(PropertyId.SpeechServiceConnection_Endpoint, void 0);
+    if (!endpoint) {
+      const region = config.parameters.getProperty(PropertyId.SpeechServiceConnection_Region, void 0);
+      const hostSuffix = ConnectionFactoryBase.getHostSuffix(region);
+      const host = config.parameters.getProperty(PropertyId.SpeechServiceConnection_Host, "wss://" + region + ".s2s.speech" + hostSuffix);
+      endpoint = host + "/speech/translation/cognitiveservices/v1";
+    }
+    const queryParams = {
+      from: config.parameters.getProperty(PropertyId.SpeechServiceConnection_RecoLanguage),
+      to: config.parameters.getProperty(PropertyId.SpeechServiceConnection_TranslationToLanguages)
+    };
+    this.setCommonUrlParams(config, queryParams, endpoint);
+    this.setUrlParameter(PropertyId.SpeechServiceResponse_TranslationRequestStablePartialResult, QueryParameterNames.StableTranslation, config, queryParams, endpoint);
+    const voiceName = "voice";
+    const featureName = "features";
+    if (config.parameters.getProperty(PropertyId.SpeechServiceConnection_TranslationVoice, void 0) !== void 0) {
+      queryParams[voiceName] = config.parameters.getProperty(PropertyId.SpeechServiceConnection_TranslationVoice);
+      queryParams[featureName] = "texttospeech";
+    }
+    const headers = {};
+    if (authInfo.token !== void 0 && authInfo.token !== "") {
+      headers[authInfo.headerName] = authInfo.token;
+    }
+    headers[HeaderNames.ConnectionId] = connectionId;
+    config.parameters.setProperty(PropertyId.SpeechServiceConnection_Url, endpoint);
+    const enableCompression = config.parameters.getProperty("SPEECH-EnableWebsocketCompression", "false") === "true";
+    return new WebsocketConnection(endpoint, queryParams, headers, new WebsocketMessageFormatter(), ProxyInfo.fromRecognizerConfig(config), enableCompression, connectionId);
+  }
+}
 class SpeechSynthesisConnectionFactory {
   constructor() {
     this.synthesisUri = "/cognitiveservices/websocket/v1";
@@ -3537,6 +5058,901 @@ class SpeechSynthesisConnectionFactory {
     config.parameters.setProperty(PropertyId.SpeechServiceConnection_Url, endpoint);
     const enableCompression = config.parameters.getProperty("SPEECH-EnableWebsocketCompression", "false") === "true";
     return new WebsocketConnection(endpoint, queryParams, headers, new WebsocketMessageFormatter(), ProxyInfo.fromParameters(config.parameters), enableCompression, connectionId);
+  }
+}
+class EnumTranslation {
+  static implTranslateRecognitionResult(recognitionStatus) {
+    let reason = ResultReason.Canceled;
+    switch (recognitionStatus) {
+      case RecognitionStatus.Success:
+        reason = ResultReason.RecognizedSpeech;
+        break;
+      case RecognitionStatus.NoMatch:
+      case RecognitionStatus.InitialSilenceTimeout:
+      case RecognitionStatus.BabbleTimeout:
+      case RecognitionStatus.EndOfDictation:
+        reason = ResultReason.NoMatch;
+        break;
+      case RecognitionStatus.Error:
+      case RecognitionStatus.BadRequest:
+      case RecognitionStatus.Forbidden:
+      default:
+        reason = ResultReason.Canceled;
+        break;
+    }
+    return reason;
+  }
+  static implTranslateCancelResult(recognitionStatus) {
+    let reason = CancellationReason.EndOfStream;
+    switch (recognitionStatus) {
+      case RecognitionStatus.Success:
+      case RecognitionStatus.EndOfDictation:
+      case RecognitionStatus.NoMatch:
+        reason = CancellationReason.EndOfStream;
+        break;
+      case RecognitionStatus.InitialSilenceTimeout:
+      case RecognitionStatus.BabbleTimeout:
+      case RecognitionStatus.Error:
+      case RecognitionStatus.BadRequest:
+      case RecognitionStatus.Forbidden:
+      default:
+        reason = CancellationReason.Error;
+        break;
+    }
+    return reason;
+  }
+  static implTranslateCancelErrorCode(recognitionStatus) {
+    let reason = CancellationErrorCode.NoError;
+    switch (recognitionStatus) {
+      case RecognitionStatus.Error:
+        reason = CancellationErrorCode.ServiceError;
+        break;
+      case RecognitionStatus.TooManyRequests:
+        reason = CancellationErrorCode.TooManyRequests;
+        break;
+      case RecognitionStatus.BadRequest:
+        reason = CancellationErrorCode.BadRequestParameters;
+        break;
+      case RecognitionStatus.Forbidden:
+        reason = CancellationErrorCode.Forbidden;
+        break;
+      default:
+        reason = CancellationErrorCode.NoError;
+        break;
+    }
+    return reason;
+  }
+  static implTranslateErrorDetails(cancellationErrorCode) {
+    let errorDetails = "The speech service encountered an internal error and could not continue.";
+    switch (cancellationErrorCode) {
+      case CancellationErrorCode.Forbidden:
+        errorDetails = "The recognizer is using a free subscription that ran out of quota.";
+        break;
+      case CancellationErrorCode.BadRequestParameters:
+        errorDetails = "Invalid parameter or unsupported audio format in the request.";
+        break;
+      case CancellationErrorCode.TooManyRequests:
+        errorDetails = "The number of parallel requests exceeded the number of allowed concurrent transcriptions.";
+        break;
+    }
+    return errorDetails;
+  }
+}
+var SynthesisStatus;
+(function(SynthesisStatus2) {
+  SynthesisStatus2[SynthesisStatus2["Success"] = 0] = "Success";
+  SynthesisStatus2[SynthesisStatus2["SynthesisEnd"] = 1] = "SynthesisEnd";
+  SynthesisStatus2[SynthesisStatus2["Error"] = 2] = "Error";
+})(SynthesisStatus || (SynthesisStatus = {}));
+var RecognitionStatus;
+(function(RecognitionStatus2) {
+  RecognitionStatus2[RecognitionStatus2["Success"] = 0] = "Success";
+  RecognitionStatus2[RecognitionStatus2["NoMatch"] = 1] = "NoMatch";
+  RecognitionStatus2[RecognitionStatus2["InitialSilenceTimeout"] = 2] = "InitialSilenceTimeout";
+  RecognitionStatus2[RecognitionStatus2["BabbleTimeout"] = 3] = "BabbleTimeout";
+  RecognitionStatus2[RecognitionStatus2["Error"] = 4] = "Error";
+  RecognitionStatus2[RecognitionStatus2["EndOfDictation"] = 5] = "EndOfDictation";
+  RecognitionStatus2[RecognitionStatus2["TooManyRequests"] = 6] = "TooManyRequests";
+  RecognitionStatus2[RecognitionStatus2["BadRequest"] = 7] = "BadRequest";
+  RecognitionStatus2[RecognitionStatus2["Forbidden"] = 8] = "Forbidden";
+})(RecognitionStatus || (RecognitionStatus = {}));
+class TranslationSynthesisEnd {
+  constructor(json) {
+    this.privSynthesisEnd = JSON.parse(json);
+    this.privSynthesisEnd.SynthesisStatus = SynthesisStatus[this.privSynthesisEnd.SynthesisStatus];
+  }
+  static fromJSON(json) {
+    return new TranslationSynthesisEnd(json);
+  }
+  get SynthesisStatus() {
+    return this.privSynthesisEnd.SynthesisStatus;
+  }
+  get FailureReason() {
+    return this.privSynthesisEnd.FailureReason;
+  }
+}
+class TranslationHypothesis {
+  constructor(json) {
+    this.privTranslationHypothesis = JSON.parse(json);
+    this.privTranslationHypothesis.Translation.TranslationStatus = TranslationStatus[this.privTranslationHypothesis.Translation.TranslationStatus];
+  }
+  static fromJSON(json) {
+    return new TranslationHypothesis(json);
+  }
+  get Duration() {
+    return this.privTranslationHypothesis.Duration;
+  }
+  get Offset() {
+    return this.privTranslationHypothesis.Offset;
+  }
+  get Text() {
+    return this.privTranslationHypothesis.Text;
+  }
+  get Translation() {
+    return this.privTranslationHypothesis.Translation;
+  }
+}
+class TranslationPhrase {
+  constructor(phrase) {
+    this.privTranslationPhrase = phrase;
+    this.privTranslationPhrase.RecognitionStatus = RecognitionStatus[this.privTranslationPhrase.RecognitionStatus];
+    if (this.privTranslationPhrase.Translation !== void 0) {
+      this.privTranslationPhrase.Translation.TranslationStatus = TranslationStatus[this.privTranslationPhrase.Translation.TranslationStatus];
+    }
+  }
+  static fromJSON(json) {
+    return new TranslationPhrase(JSON.parse(json));
+  }
+  static fromTranslationResponse(translationResponse) {
+    Contracts.throwIfNullOrUndefined(translationResponse, "translationResponse");
+    const phrase = translationResponse.SpeechPhrase;
+    translationResponse.SpeechPhrase = void 0;
+    phrase.Translation = translationResponse;
+    phrase.Text = phrase.DisplayText;
+    return new TranslationPhrase(phrase);
+  }
+  get RecognitionStatus() {
+    return this.privTranslationPhrase.RecognitionStatus;
+  }
+  get Offset() {
+    return this.privTranslationPhrase.Offset;
+  }
+  get Duration() {
+    return this.privTranslationPhrase.Duration;
+  }
+  get Text() {
+    return this.privTranslationPhrase.Text;
+  }
+  get Translation() {
+    return this.privTranslationPhrase.Translation;
+  }
+}
+var __awaiter$9 = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
+    });
+  }
+  return new (P || (P = Promise))(function(resolve, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function step(result) {
+      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
+};
+class TranslationServiceRecognizer extends ServiceRecognizerBase {
+  constructor(authentication, connectionFactory, audioSource, recognizerConfig, translationRecognizer) {
+    super(authentication, connectionFactory, audioSource, recognizerConfig, translationRecognizer);
+    this.privTranslationRecognizer = translationRecognizer;
+    this.connectionEvents.attach((connectionEvent) => {
+      if (connectionEvent.name === "ConnectionEstablishedEvent") {
+        this.privTranslationRecognizer.onConnection();
+      } else if (connectionEvent.name === "ConnectionClosedEvent") {
+        void this.privTranslationRecognizer.onDisconnection();
+      }
+    });
+  }
+  processTypeSpecificMessages(connectionMessage) {
+    return __awaiter$9(this, void 0, void 0, function* () {
+      const resultProps = new PropertyCollection();
+      let processed = false;
+      const handleTranslationPhrase = (translatedPhrase) => __awaiter$9(this, void 0, void 0, function* () {
+        this.privRequestSession.onPhraseRecognized(this.privRequestSession.currentTurnAudioOffset + translatedPhrase.Offset + translatedPhrase.Duration);
+        if (translatedPhrase.RecognitionStatus === RecognitionStatus.Success) {
+          const result = this.fireEventForResult(translatedPhrase, resultProps);
+          if (!!this.privTranslationRecognizer.recognized) {
+            try {
+              this.privTranslationRecognizer.recognized(this.privTranslationRecognizer, result);
+            } catch (error) {
+            }
+          }
+          if (!!this.privSuccessCallback) {
+            try {
+              this.privSuccessCallback(result.result);
+            } catch (e) {
+              if (!!this.privErrorCallback) {
+                this.privErrorCallback(e);
+              }
+            }
+            this.privSuccessCallback = void 0;
+            this.privErrorCallback = void 0;
+          }
+        } else {
+          const reason = EnumTranslation.implTranslateRecognitionResult(translatedPhrase.RecognitionStatus);
+          const result = new TranslationRecognitionResult(void 0, this.privRequestSession.requestId, reason, translatedPhrase.Text, translatedPhrase.Duration, this.privRequestSession.currentTurnAudioOffset + translatedPhrase.Offset, void 0, connectionMessage.textBody, resultProps);
+          if (reason === ResultReason.Canceled) {
+            const cancelReason = EnumTranslation.implTranslateCancelResult(translatedPhrase.RecognitionStatus);
+            const cancellationErrorCode = EnumTranslation.implTranslateCancelErrorCode(translatedPhrase.RecognitionStatus);
+            yield this.cancelRecognitionLocal(cancelReason, cancellationErrorCode, EnumTranslation.implTranslateErrorDetails(cancellationErrorCode));
+          } else {
+            if (!(this.privRequestSession.isSpeechEnded && reason === ResultReason.NoMatch && translatedPhrase.RecognitionStatus !== RecognitionStatus.InitialSilenceTimeout)) {
+              const ev = new TranslationRecognitionEventArgs(result, result.offset, this.privRequestSession.sessionId);
+              if (!!this.privTranslationRecognizer.recognized) {
+                try {
+                  this.privTranslationRecognizer.recognized(this.privTranslationRecognizer, ev);
+                } catch (error) {
+                }
+              }
+            }
+            if (!!this.privSuccessCallback) {
+              try {
+                this.privSuccessCallback(result);
+              } catch (e) {
+                if (!!this.privErrorCallback) {
+                  this.privErrorCallback(e);
+                }
+              }
+              this.privSuccessCallback = void 0;
+              this.privErrorCallback = void 0;
+            }
+          }
+          processed = true;
+        }
+      });
+      if (connectionMessage.messageType === MessageType.Text) {
+        resultProps.setProperty(PropertyId.SpeechServiceResponse_JsonResult, connectionMessage.textBody);
+      }
+      switch (connectionMessage.path.toLowerCase()) {
+        case "translation.hypothesis":
+          const result = this.fireEventForResult(TranslationHypothesis.fromJSON(connectionMessage.textBody), resultProps);
+          this.privRequestSession.onHypothesis(this.privRequestSession.currentTurnAudioOffset + result.offset);
+          if (!!this.privTranslationRecognizer.recognizing) {
+            try {
+              this.privTranslationRecognizer.recognizing(this.privTranslationRecognizer, result);
+            } catch (error) {
+            }
+          }
+          processed = true;
+          break;
+        case "translation.response":
+          const phrase = JSON.parse(connectionMessage.textBody);
+          if (!!phrase.SpeechPhrase) {
+            yield handleTranslationPhrase(TranslationPhrase.fromTranslationResponse(phrase));
+          }
+          break;
+        case "translation.phrase":
+          yield handleTranslationPhrase(TranslationPhrase.fromJSON(connectionMessage.textBody));
+          break;
+        case "translation.synthesis":
+          this.sendSynthesisAudio(connectionMessage.binaryBody, this.privRequestSession.sessionId);
+          processed = true;
+          break;
+        case "translation.synthesis.end":
+          const synthEnd = TranslationSynthesisEnd.fromJSON(connectionMessage.textBody);
+          switch (synthEnd.SynthesisStatus) {
+            case SynthesisStatus.Error:
+              if (!!this.privTranslationRecognizer.synthesizing) {
+                const result2 = new TranslationSynthesisResult(ResultReason.Canceled, void 0);
+                const retEvent = new TranslationSynthesisEventArgs(result2, this.privRequestSession.sessionId);
+                try {
+                  this.privTranslationRecognizer.synthesizing(this.privTranslationRecognizer, retEvent);
+                } catch (error) {
+                }
+              }
+              if (!!this.privTranslationRecognizer.canceled) {
+                const canceledResult = new TranslationRecognitionCanceledEventArgs(this.privRequestSession.sessionId, CancellationReason.Error, synthEnd.FailureReason, CancellationErrorCode.ServiceError, null);
+                try {
+                  this.privTranslationRecognizer.canceled(this.privTranslationRecognizer, canceledResult);
+                } catch (error) {
+                }
+              }
+              break;
+            case SynthesisStatus.Success:
+              this.sendSynthesisAudio(void 0, this.privRequestSession.sessionId);
+              break;
+          }
+          processed = true;
+          break;
+      }
+      return processed;
+    });
+  }
+  cancelRecognition(sessionId, requestId, cancellationReason, errorCode, error) {
+    const properties = new PropertyCollection();
+    properties.setProperty(CancellationErrorCodePropertyName, CancellationErrorCode[errorCode]);
+    if (!!this.privTranslationRecognizer.canceled) {
+      const cancelEvent = new TranslationRecognitionCanceledEventArgs(sessionId, cancellationReason, error, errorCode, void 0);
+      try {
+        this.privTranslationRecognizer.canceled(this.privTranslationRecognizer, cancelEvent);
+      } catch (_a) {
+      }
+    }
+    if (!!this.privSuccessCallback) {
+      const result = new TranslationRecognitionResult(
+        void 0,
+        requestId,
+        ResultReason.Canceled,
+        void 0,
+        void 0,
+        void 0,
+        error,
+        void 0,
+        properties
+      );
+      try {
+        this.privSuccessCallback(result);
+        this.privSuccessCallback = void 0;
+      } catch (_b) {
+      }
+    }
+  }
+  fireEventForResult(serviceResult, properties) {
+    let translations;
+    if (void 0 !== serviceResult.Translation.Translations) {
+      translations = new Translations();
+      for (const translation of serviceResult.Translation.Translations) {
+        translations.set(translation.Language, translation.Text || translation.DisplayText);
+      }
+    }
+    let resultReason;
+    if (serviceResult instanceof TranslationPhrase) {
+      if (serviceResult.Translation.TranslationStatus === TranslationStatus.Success) {
+        resultReason = ResultReason.TranslatedSpeech;
+      } else {
+        resultReason = ResultReason.RecognizedSpeech;
+      }
+    } else {
+      resultReason = ResultReason.TranslatingSpeech;
+    }
+    const offset = serviceResult.Offset + this.privRequestSession.currentTurnAudioOffset;
+    const result = new TranslationRecognitionResult(translations, this.privRequestSession.requestId, resultReason, serviceResult.Text, serviceResult.Duration, offset, serviceResult.Translation.FailureReason, JSON.stringify(serviceResult), properties);
+    const ev = new TranslationRecognitionEventArgs(result, offset, this.privRequestSession.sessionId);
+    return ev;
+  }
+  sendSynthesisAudio(audio, sessionId) {
+    const reason = void 0 === audio ? ResultReason.SynthesizingAudioCompleted : ResultReason.SynthesizingAudio;
+    const result = new TranslationSynthesisResult(reason, audio);
+    const retEvent = new TranslationSynthesisEventArgs(result, sessionId);
+    if (!!this.privTranslationRecognizer.synthesizing) {
+      try {
+        this.privTranslationRecognizer.synthesizing(this.privTranslationRecognizer, retEvent);
+      } catch (error) {
+      }
+    }
+  }
+}
+class SpeechDetected {
+  constructor(json) {
+    this.privSpeechStartDetected = JSON.parse(json);
+  }
+  static fromJSON(json) {
+    return new SpeechDetected(json);
+  }
+  get Offset() {
+    return this.privSpeechStartDetected.Offset;
+  }
+}
+class ServiceTelemetryListener {
+  constructor(requestId, audioSourceId, audioNodeId) {
+    this.privIsDisposed = false;
+    this.privListeningTriggerMetric = null;
+    this.privMicMetric = null;
+    this.privConnectionEstablishMetric = null;
+    this.privRequestId = requestId;
+    this.privAudioSourceId = audioSourceId;
+    this.privAudioNodeId = audioNodeId;
+    this.privReceivedMessages = {};
+    this.privPhraseLatencies = [];
+    this.privHypothesisLatencies = [];
+  }
+  phraseReceived(audioReceivedTime) {
+    if (audioReceivedTime > 0) {
+      this.privPhraseLatencies.push(Date.now() - audioReceivedTime);
+    }
+  }
+  hypothesisReceived(audioReceivedTime) {
+    if (audioReceivedTime > 0) {
+      this.privHypothesisLatencies.push(Date.now() - audioReceivedTime);
+    }
+  }
+  onEvent(e) {
+    if (this.privIsDisposed) {
+      return;
+    }
+    if (e instanceof RecognitionTriggeredEvent && e.requestId === this.privRequestId) {
+      this.privListeningTriggerMetric = {
+        End: e.eventTime,
+        Name: "ListeningTrigger",
+        Start: e.eventTime
+      };
+    }
+    if (e instanceof AudioStreamNodeAttachingEvent && e.audioSourceId === this.privAudioSourceId && e.audioNodeId === this.privAudioNodeId) {
+      this.privMicStartTime = e.eventTime;
+    }
+    if (e instanceof AudioStreamNodeAttachedEvent && e.audioSourceId === this.privAudioSourceId && e.audioNodeId === this.privAudioNodeId) {
+      this.privMicStartTime = e.eventTime;
+    }
+    if (e instanceof AudioSourceErrorEvent && e.audioSourceId === this.privAudioSourceId) {
+      if (!this.privMicMetric) {
+        this.privMicMetric = {
+          End: e.eventTime,
+          Error: e.error,
+          Name: "Microphone",
+          Start: this.privMicStartTime
+        };
+      }
+    }
+    if (e instanceof AudioStreamNodeErrorEvent && e.audioSourceId === this.privAudioSourceId && e.audioNodeId === this.privAudioNodeId) {
+      if (!this.privMicMetric) {
+        this.privMicMetric = {
+          End: e.eventTime,
+          Error: e.error,
+          Name: "Microphone",
+          Start: this.privMicStartTime
+        };
+      }
+    }
+    if (e instanceof AudioStreamNodeDetachedEvent && e.audioSourceId === this.privAudioSourceId && e.audioNodeId === this.privAudioNodeId) {
+      if (!this.privMicMetric) {
+        this.privMicMetric = {
+          End: e.eventTime,
+          Name: "Microphone",
+          Start: this.privMicStartTime
+        };
+      }
+    }
+    if (e instanceof ConnectingToServiceEvent && e.requestId === this.privRequestId) {
+      this.privConnectionId = e.sessionId;
+    }
+    if (e instanceof ConnectionStartEvent && e.connectionId === this.privConnectionId) {
+      this.privConnectionStartTime = e.eventTime;
+    }
+    if (e instanceof ConnectionEstablishedEvent && e.connectionId === this.privConnectionId) {
+      if (!this.privConnectionEstablishMetric) {
+        this.privConnectionEstablishMetric = {
+          End: e.eventTime,
+          Id: this.privConnectionId,
+          Name: "Connection",
+          Start: this.privConnectionStartTime
+        };
+      }
+    }
+    if (e instanceof ConnectionEstablishErrorEvent && e.connectionId === this.privConnectionId) {
+      if (!this.privConnectionEstablishMetric) {
+        this.privConnectionEstablishMetric = {
+          End: e.eventTime,
+          Error: this.getConnectionError(e.statusCode),
+          Id: this.privConnectionId,
+          Name: "Connection",
+          Start: this.privConnectionStartTime
+        };
+      }
+    }
+    if (e instanceof ConnectionMessageReceivedEvent && e.connectionId === this.privConnectionId) {
+      if (e.message && e.message.headers && e.message.headers.path) {
+        if (!this.privReceivedMessages[e.message.headers.path]) {
+          this.privReceivedMessages[e.message.headers.path] = new Array();
+        }
+        const maxMessagesToSend = 50;
+        if (this.privReceivedMessages[e.message.headers.path].length < maxMessagesToSend) {
+          this.privReceivedMessages[e.message.headers.path].push(e.networkReceivedTime);
+        }
+      }
+    }
+  }
+  getTelemetry() {
+    const metrics = new Array();
+    if (this.privListeningTriggerMetric) {
+      metrics.push(this.privListeningTriggerMetric);
+    }
+    if (this.privMicMetric) {
+      metrics.push(this.privMicMetric);
+    }
+    if (this.privConnectionEstablishMetric) {
+      metrics.push(this.privConnectionEstablishMetric);
+    }
+    if (this.privPhraseLatencies.length > 0) {
+      metrics.push({
+        PhraseLatencyMs: this.privPhraseLatencies
+      });
+    }
+    if (this.privHypothesisLatencies.length > 0) {
+      metrics.push({
+        FirstHypothesisLatencyMs: this.privHypothesisLatencies
+      });
+    }
+    const telemetry = {
+      Metrics: metrics,
+      ReceivedMessages: this.privReceivedMessages
+    };
+    const json = JSON.stringify(telemetry);
+    this.privReceivedMessages = {};
+    this.privListeningTriggerMetric = null;
+    this.privMicMetric = null;
+    this.privConnectionEstablishMetric = null;
+    this.privPhraseLatencies = [];
+    this.privHypothesisLatencies = [];
+    return json;
+  }
+  get hasTelemetry() {
+    return Object.keys(this.privReceivedMessages).length !== 0 || this.privListeningTriggerMetric !== null || this.privMicMetric !== null || this.privConnectionEstablishMetric !== null || this.privPhraseLatencies.length !== 0 || this.privHypothesisLatencies.length !== 0;
+  }
+  dispose() {
+    this.privIsDisposed = true;
+  }
+  getConnectionError(statusCode) {
+    switch (statusCode) {
+      case 400:
+      case 1002:
+      case 1003:
+      case 1005:
+      case 1007:
+      case 1008:
+      case 1009:
+        return "BadRequest";
+      case 401:
+        return "Unauthorized";
+      case 403:
+        return "Forbidden";
+      case 503:
+      case 1001:
+        return "ServerUnavailable";
+      case 500:
+      case 1011:
+        return "ServerError";
+      case 408:
+      case 504:
+        return "Timeout";
+      default:
+        return "statuscode:" + statusCode.toString();
+    }
+  }
+}
+var __awaiter$8 = globalThis && globalThis.__awaiter || function(thisArg, _arguments, P, generator) {
+  function adopt(value) {
+    return value instanceof P ? value : new P(function(resolve) {
+      resolve(value);
+    });
+  }
+  return new (P || (P = Promise))(function(resolve, reject) {
+    function fulfilled(value) {
+      try {
+        step(generator.next(value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function rejected(value) {
+      try {
+        step(generator["throw"](value));
+      } catch (e) {
+        reject(e);
+      }
+    }
+    function step(result) {
+      result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
+    }
+    step((generator = generator.apply(thisArg, _arguments || [])).next());
+  });
+};
+class RequestSession {
+  constructor(audioSourceId) {
+    this.privIsDisposed = false;
+    this.privDetachables = new Array();
+    this.privIsAudioNodeDetached = false;
+    this.privIsRecognizing = false;
+    this.privIsSpeechEnded = false;
+    this.privTurnStartAudioOffset = 0;
+    this.privLastRecoOffset = 0;
+    this.privHypothesisReceived = false;
+    this.privBytesSent = 0;
+    this.privRecogNumber = 0;
+    this.privInTurn = false;
+    this.privConnectionAttempts = 0;
+    this.privAudioSourceId = audioSourceId;
+    this.privRequestId = createNoDashGuid();
+    this.privAudioNodeId = createNoDashGuid();
+    this.privTurnDeferral = new Deferred();
+    this.privTurnDeferral.resolve();
+  }
+  get sessionId() {
+    return this.privSessionId;
+  }
+  get requestId() {
+    return this.privRequestId;
+  }
+  get audioNodeId() {
+    return this.privAudioNodeId;
+  }
+  get turnCompletionPromise() {
+    return this.privTurnDeferral.promise;
+  }
+  get isSpeechEnded() {
+    return this.privIsSpeechEnded;
+  }
+  get isRecognizing() {
+    return this.privIsRecognizing;
+  }
+  get currentTurnAudioOffset() {
+    return this.privTurnStartAudioOffset;
+  }
+  get recogNumber() {
+    return this.privRecogNumber;
+  }
+  get numConnectionAttempts() {
+    return this.privConnectionAttempts;
+  }
+  get bytesSent() {
+    return this.privBytesSent;
+  }
+  listenForServiceTelemetry(eventSource) {
+    if (!!this.privServiceTelemetryListener) {
+      this.privDetachables.push(eventSource.attachListener(this.privServiceTelemetryListener));
+    }
+  }
+  startNewRecognition() {
+    this.privIsSpeechEnded = false;
+    this.privIsRecognizing = true;
+    this.privTurnStartAudioOffset = 0;
+    this.privLastRecoOffset = 0;
+    this.privRecogNumber++;
+    this.privServiceTelemetryListener = new ServiceTelemetryListener(this.privRequestId, this.privAudioSourceId, this.privAudioNodeId);
+    this.onEvent(new RecognitionTriggeredEvent(this.requestId, this.privSessionId, this.privAudioSourceId, this.privAudioNodeId));
+  }
+  onAudioSourceAttachCompleted(audioNode, isError) {
+    return __awaiter$8(this, void 0, void 0, function* () {
+      this.privAudioNode = audioNode;
+      this.privIsAudioNodeDetached = false;
+      if (isError) {
+        yield this.onComplete();
+      } else {
+        this.onEvent(new ListeningStartedEvent(this.privRequestId, this.privSessionId, this.privAudioSourceId, this.privAudioNodeId));
+      }
+    });
+  }
+  onPreConnectionStart(authFetchEventId, connectionId) {
+    this.privAuthFetchEventId = authFetchEventId;
+    this.privSessionId = connectionId;
+    this.onEvent(new ConnectingToServiceEvent(this.privRequestId, this.privAuthFetchEventId, this.privSessionId));
+  }
+  onAuthCompleted(isError) {
+    return __awaiter$8(this, void 0, void 0, function* () {
+      if (isError) {
+        yield this.onComplete();
+      }
+    });
+  }
+  onConnectionEstablishCompleted(statusCode, reason) {
+    return __awaiter$8(this, void 0, void 0, function* () {
+      if (statusCode === 200) {
+        this.onEvent(new RecognitionStartedEvent(this.requestId, this.privAudioSourceId, this.privAudioNodeId, this.privAuthFetchEventId, this.privSessionId));
+        if (!!this.privAudioNode) {
+          this.privAudioNode.replay();
+        }
+        this.privTurnStartAudioOffset = this.privLastRecoOffset;
+        this.privBytesSent = 0;
+        return;
+      } else if (statusCode === 403) {
+        yield this.onComplete();
+      }
+    });
+  }
+  onServiceTurnEndResponse(continuousRecognition) {
+    return __awaiter$8(this, void 0, void 0, function* () {
+      this.privTurnDeferral.resolve();
+      if (!continuousRecognition || this.isSpeechEnded) {
+        yield this.onComplete();
+        this.privInTurn = false;
+      } else {
+        this.privTurnStartAudioOffset = this.privLastRecoOffset;
+        this.privAudioNode.replay();
+      }
+    });
+  }
+  onSpeechContext() {
+    this.privRequestId = createNoDashGuid();
+  }
+  onServiceTurnStartResponse() {
+    if (!!this.privTurnDeferral && !!this.privInTurn) {
+      this.privTurnDeferral.reject("Another turn started before current completed.");
+      this.privTurnDeferral.promise.then().catch(() => {
+      });
+    }
+    this.privInTurn = true;
+    this.privTurnDeferral = new Deferred();
+  }
+  onHypothesis(offset) {
+    if (!this.privHypothesisReceived) {
+      this.privHypothesisReceived = true;
+      this.privServiceTelemetryListener.hypothesisReceived(this.privAudioNode.findTimeAtOffset(offset));
+    }
+  }
+  onPhraseRecognized(offset) {
+    this.privServiceTelemetryListener.phraseReceived(this.privAudioNode.findTimeAtOffset(offset));
+    this.onServiceRecognized(offset);
+  }
+  onServiceRecognized(offset) {
+    this.privLastRecoOffset = offset;
+    this.privHypothesisReceived = false;
+    this.privAudioNode.shrinkBuffers(offset);
+    this.privConnectionAttempts = 0;
+  }
+  onAudioSent(bytesSent) {
+    this.privBytesSent += bytesSent;
+  }
+  onRetryConnection() {
+    this.privConnectionAttempts++;
+  }
+  dispose() {
+    return __awaiter$8(this, void 0, void 0, function* () {
+      if (!this.privIsDisposed) {
+        this.privIsDisposed = true;
+        for (const detachable of this.privDetachables) {
+          yield detachable.detach();
+        }
+        if (!!this.privServiceTelemetryListener) {
+          this.privServiceTelemetryListener.dispose();
+        }
+        this.privIsRecognizing = false;
+      }
+    });
+  }
+  getTelemetry() {
+    if (this.privServiceTelemetryListener.hasTelemetry) {
+      return this.privServiceTelemetryListener.getTelemetry();
+    } else {
+      return null;
+    }
+  }
+  onStopRecognizing() {
+    return __awaiter$8(this, void 0, void 0, function* () {
+      yield this.onComplete();
+    });
+  }
+  onSpeechEnded() {
+    this.privIsSpeechEnded = true;
+  }
+  onEvent(event) {
+    if (!!this.privServiceTelemetryListener) {
+      this.privServiceTelemetryListener.onEvent(event);
+    }
+    Events.instance.onEvent(event);
+  }
+  onComplete() {
+    return __awaiter$8(this, void 0, void 0, function* () {
+      if (!!this.privIsRecognizing) {
+        this.privIsRecognizing = false;
+        yield this.detachAudioNode();
+      }
+    });
+  }
+  detachAudioNode() {
+    return __awaiter$8(this, void 0, void 0, function* () {
+      if (!this.privIsAudioNodeDetached) {
+        this.privIsAudioNodeDetached = true;
+        if (this.privAudioNode) {
+          yield this.privAudioNode.detach();
+        }
+      }
+    });
+  }
+}
+class SpeechContext {
+  constructor(dynamicGrammar) {
+    this.privContext = {};
+    this.privDynamicGrammar = dynamicGrammar;
+  }
+  setSection(sectionName, value) {
+    this.privContext[sectionName] = value;
+  }
+  setPronunciationAssessmentParams(params) {
+    if (this.privContext.phraseDetection === void 0) {
+      this.privContext.phraseDetection = {
+        enrichment: {
+          pronunciationAssessment: {}
+        }
+      };
+    }
+    this.privContext.phraseDetection.enrichment.pronunciationAssessment = JSON.parse(params);
+    this.setWordLevelTimings();
+    this.privContext.phraseOutput.detailed.options.push("PronunciationAssessment");
+    if (this.privContext.phraseOutput.detailed.options.indexOf("SNR") === -1) {
+      this.privContext.phraseOutput.detailed.options.push("SNR");
+    }
+  }
+  setWordLevelTimings() {
+    if (this.privContext.phraseOutput === void 0) {
+      this.privContext.phraseOutput = {
+        detailed: {
+          options: []
+        },
+        format: {}
+      };
+    }
+    if (this.privContext.phraseOutput.detailed === void 0) {
+      this.privContext.phraseOutput.detailed = {
+        options: []
+      };
+    }
+    this.privContext.phraseOutput.format = "Detailed";
+    if (this.privContext.phraseOutput.detailed.options.indexOf("WordTimings") === -1) {
+      this.privContext.phraseOutput.detailed.options.push("WordTimings");
+    }
+  }
+  toJSON() {
+    const dgi = this.privDynamicGrammar.generateGrammarObject();
+    this.setSection("dgi", dgi);
+    const ret = JSON.stringify(this.privContext);
+    return ret;
+  }
+}
+class DynamicGrammarBuilder {
+  addPhrase(phrase) {
+    if (!this.privPhrases) {
+      this.privPhrases = [];
+    }
+    if (phrase instanceof Array) {
+      this.privPhrases = this.privPhrases.concat(phrase);
+    } else {
+      this.privPhrases.push(phrase);
+    }
+  }
+  clearPhrases() {
+    this.privPhrases = void 0;
+  }
+  addReferenceGrammar(grammar) {
+    if (!this.privGrammars) {
+      this.privGrammars = [];
+    }
+    if (grammar instanceof Array) {
+      this.privGrammars = this.privGrammars.concat(grammar);
+    } else {
+      this.privGrammars.push(grammar);
+    }
+  }
+  clearGrammars() {
+    this.privGrammars = void 0;
+  }
+  generateGrammarObject() {
+    if (this.privGrammars === void 0 && this.privPhrases === void 0) {
+      return void 0;
+    }
+    const retObj = {};
+    retObj.ReferenceGrammars = this.privGrammars;
+    if (void 0 !== this.privPhrases && 0 !== this.privPhrases.length) {
+      const retPhrases = [];
+      this.privPhrases.forEach((value) => {
+        retPhrases.push({
+          Text: value
+        });
+      });
+      retObj.Groups = [{ Type: "Generic", Items: retPhrases }];
+    }
+    return retObj;
   }
 }
 class AgentConfig {
@@ -5564,6 +7980,99 @@ class WebsocketConnection {
     return this.privConnectionMessageAdapter.events;
   }
 }
+class ReplayableAudioNode {
+  constructor(audioSource, bytesPerSecond) {
+    this.privBuffers = [];
+    this.privReplayOffset = 0;
+    this.privLastShrinkOffset = 0;
+    this.privBufferStartOffset = 0;
+    this.privBufferSerial = 0;
+    this.privBufferedBytes = 0;
+    this.privReplay = false;
+    this.privLastChunkAcquiredTime = 0;
+    this.privAudioNode = audioSource;
+    this.privBytesPerSecond = bytesPerSecond;
+  }
+  id() {
+    return this.privAudioNode.id();
+  }
+  read() {
+    if (!!this.privReplay && this.privBuffers.length !== 0) {
+      const offsetToSeek = this.privReplayOffset - this.privBufferStartOffset;
+      let bytesToSeek = Math.round(offsetToSeek * this.privBytesPerSecond * 1e-7);
+      if (0 !== bytesToSeek % 2) {
+        bytesToSeek++;
+      }
+      let i = 0;
+      while (i < this.privBuffers.length && bytesToSeek >= this.privBuffers[i].chunk.buffer.byteLength) {
+        bytesToSeek -= this.privBuffers[i++].chunk.buffer.byteLength;
+      }
+      if (i < this.privBuffers.length) {
+        const retVal = this.privBuffers[i].chunk.buffer.slice(bytesToSeek);
+        this.privReplayOffset += retVal.byteLength / this.privBytesPerSecond * 1e7;
+        if (i === this.privBuffers.length - 1) {
+          this.privReplay = false;
+        }
+        return Promise.resolve({
+          buffer: retVal,
+          isEnd: false,
+          timeReceived: this.privBuffers[i].chunk.timeReceived
+        });
+      }
+    }
+    return this.privAudioNode.read().then((result) => {
+      if (result && result.buffer) {
+        this.privBuffers.push(new BufferEntry(result, this.privBufferSerial++, this.privBufferedBytes));
+        this.privBufferedBytes += result.buffer.byteLength;
+      }
+      return result;
+    });
+  }
+  detach() {
+    this.privBuffers = void 0;
+    return this.privAudioNode.detach();
+  }
+  replay() {
+    if (this.privBuffers && 0 !== this.privBuffers.length) {
+      this.privReplay = true;
+      this.privReplayOffset = this.privLastShrinkOffset;
+    }
+  }
+  shrinkBuffers(offset) {
+    if (this.privBuffers === void 0 || this.privBuffers.length === 0) {
+      return;
+    }
+    this.privLastShrinkOffset = offset;
+    const offsetToSeek = offset - this.privBufferStartOffset;
+    let bytesToSeek = Math.round(offsetToSeek * this.privBytesPerSecond * 1e-7);
+    let i = 0;
+    while (i < this.privBuffers.length && bytesToSeek >= this.privBuffers[i].chunk.buffer.byteLength) {
+      bytesToSeek -= this.privBuffers[i++].chunk.buffer.byteLength;
+    }
+    this.privBufferStartOffset = Math.round(offset - bytesToSeek / this.privBytesPerSecond * 1e7);
+    this.privBuffers = this.privBuffers.slice(i);
+  }
+  findTimeAtOffset(offset) {
+    if (offset < this.privBufferStartOffset || this.privBuffers === void 0) {
+      return 0;
+    }
+    for (const value of this.privBuffers) {
+      const startOffset = value.byteOffset / this.privBytesPerSecond * 1e7;
+      const endOffset = startOffset + value.chunk.buffer.byteLength / this.privBytesPerSecond * 1e7;
+      if (offset >= startOffset && offset <= endOffset) {
+        return value.chunk.timeReceived;
+      }
+    }
+    return 0;
+  }
+}
+class BufferEntry {
+  constructor(chunk, serial, byteOffset) {
+    this.chunk = chunk;
+    this.serial = serial;
+    this.byteOffset = byteOffset;
+  }
+}
 class ProxyInfo {
   constructor(proxyHostName, proxyPort, proxyUserName, proxyPassword) {
     this.privProxyHostName = proxyHostName;
@@ -5841,6 +8350,83 @@ class RestMessageAdapter {
     return Object.keys(params).map((k) => encodeURIComponent(k) + "=" + encodeURIComponent(params[k])).join("&");
   }
 }
+class SpeechToText {
+  constructor(key, region, sourceLanguage, targetLanguage = null) {
+    __publicField(this, "key");
+    __publicField(this, "region");
+    __publicField(this, "sourceLanguage");
+    __publicField(this, "targetLanguage");
+    __publicField(this, "recognizer");
+    this.key = key;
+    this.region = region;
+    this.sourceLanguage = sourceLanguage;
+    this.targetLanguage = targetLanguage !== null ? targetLanguage : sourceLanguage;
+  }
+  async start() {
+    await this.registerBindings(document);
+  }
+  async registerBindings(node) {
+    const nodes = node.childNodes;
+    for (let i = 0; i < nodes.length; i++) {
+      if (!nodes[i]) {
+        continue;
+      }
+      const currentNode = nodes[i];
+      if (currentNode.attributes) {
+        if (currentNode.attributes.getNamedItem("co-stt.start")) {
+          await this.handleStartModifier(currentNode, currentNode.attributes.getNamedItem("co-stt.start"));
+        } else if (currentNode.attributes.getNamedItem("co-stt.stop")) {
+          await this.handleStopModifier(currentNode, currentNode.attributes.getNamedItem("co-stt.stop"));
+        }
+      }
+      if (currentNode.childNodes.length > 0) {
+        await this.registerBindings(currentNode);
+      }
+    }
+  }
+  async handleStartModifier(node, attr) {
+    node.addEventListener("click", async (_) => {
+      const speechConfig = SpeechTranslationConfig.fromSubscription(this.key, this.region);
+      speechConfig.speechRecognitionLanguage = this.sourceLanguage;
+      speechConfig.addTargetLanguage(this.targetLanguage);
+      const audioConfig = AudioConfig.fromDefaultMicrophoneInput();
+      this.recognizer = new TranslationRecognizer(speechConfig, audioConfig);
+      document.dispatchEvent(new CustomEvent("COAzureSTTStartedRecording", {}));
+      this.recognizer.recognizeOnceAsync(
+        (result) => {
+          if (result.reason === ResultReason.TranslatedSpeech) {
+            const translation = result.translations.get(this.targetLanguage);
+            const inputElement = document.getElementById(attr.value);
+            if (inputElement !== null) {
+              if (inputElement instanceof HTMLInputElement) {
+                inputElement.value += `${translation} `;
+              } else {
+                inputElement.innerHTML += `${translation} `;
+              }
+            }
+          }
+          this.stop();
+        },
+        (err) => {
+          console.log(err);
+          this.stop();
+        }
+      );
+    });
+  }
+  async handleStopModifier(node, attr) {
+    node.addEventListener("click", async (_) => {
+      await this.stop();
+    });
+  }
+  async stop() {
+    if (this.recognizer !== void 0) {
+      this.recognizer.close();
+      this.recognizer = void 0;
+    }
+    document.dispatchEvent(new CustomEvent("COAzureSTTStoppedRecording", {}));
+  }
+}
 class TextToSpeech {
   constructor(key, region, voice, rate = 0, pitch = 0) {
     __publicField(this, "key");
@@ -5984,7 +8570,9 @@ class TextToSpeech {
       if (((_a = node.attributes.getNamedItem("co-tts.highlight")) == null ? void 0 : _a.value) !== "") {
         const newReferenceDiv = document.getElementById(node.attributes.getNamedItem("co-tts.highlight").value);
         this.highlightDiv = newReferenceDiv;
-        this.originalHighlightDivInnerHTML = newReferenceDiv.innerHTML;
+        if (newReferenceDiv !== null) {
+          this.originalHighlightDivInnerHTML = newReferenceDiv.innerHTML;
+        }
       } else {
         this.highlightDiv = node;
         this.originalHighlightDivInnerHTML = node.innerHTML;
@@ -6144,4 +8732,4 @@ class TextToSpeech {
         </speak>`;
   }
 }
-export { TextToSpeech as default };
+export { SpeechToText, TextToSpeech };
