@@ -8698,7 +8698,7 @@ class TextToSpeech {
               this.currentWord = wordBoundary.text;
               this.wordBoundaryOffset = wordBoundary.textOffset;
             }
-            if (this.currentOffset <= -1) {
+            if (this.currentOffset === Number.MAX_SAFE_INTEGER) {
               this.highlightDiv.innerHTML = this.originalHighlightDivInnerHTML;
             } else {
               this.previousWordBoundary = wordBoundary;
