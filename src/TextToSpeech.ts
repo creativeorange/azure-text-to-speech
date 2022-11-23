@@ -34,6 +34,7 @@ export class TextToSpeech {
     currentWord: string = '';
     currentOffset: number = 0;
     wordBoundaryOffset: number = 0;
+    privTextOffset: number = 0;
 
 
     constructor(key: string, region: string, voice: string, rate: number = 0, pitch: number = 0) {
@@ -237,6 +238,7 @@ export class TextToSpeech {
         }
         this.player = undefined;
         this.highlightDiv = undefined;
+        this.privTextOffset = 0;
     }
 
     async startSynthesizer(node: any, attr: Attr) {
@@ -307,12 +309,13 @@ export class TextToSpeech {
                         wordBoundary = this.previousWordBoundary ?? undefined;
                     }
 
-                    if (wordBoundary === undefined) {
+                    if (wordBoundary === undefined || this.privTextOffset > wordBoundary.privTextOffset) {
                         this.highlightDiv.innerHTML = this.originalHighlightDivInnerHTML;
                     } else {
                         if (!this.wordEncounters[wordBoundary.text]) {
                             this.wordEncounters[wordBoundary.text] = 0;
                         }
+                        this.privTextOffset = wordBoundary.privTextOffset;
 
                         if (this.currentWord !== wordBoundary.text || this.wordBoundaryOffset !== wordBoundary.textOffset) {
                             this.currentOffset = this.getPosition(
@@ -347,7 +350,11 @@ export class TextToSpeech {
     getPosition(string: string, subString: string, lastOffset: number) {
         const regex = new RegExp(`(?:^|[^-\\w])(${subString})\\b`, 'g');
         const offset = string.slice(lastOffset).search(regex);
-        return (offset <= 0 ? offset : offset + 1) + lastOffset;
+        let newOffset = (offset <= 0 ? Number.MAX_SAFE_INTEGER : offset + 1);
+        if (newOffset !== Number.MAX_SAFE_INTEGER) {
+            newOffset += lastOffset;
+        }
+        return newOffset;
     }
 
     buildSSML(text: string) {

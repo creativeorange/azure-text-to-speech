@@ -9,6 +9,7 @@ module.exports = {
         'google'
     ],
     'rules': {
+        "no-console": "off",
         'max-len': ['error', {'code': 125}],
         'indent': ['error', 4],
         'require-jsdoc': ['error', {

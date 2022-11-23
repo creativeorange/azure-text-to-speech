@@ -8449,6 +8449,7 @@ class TextToSpeech {
     __publicField(this, "currentWord", "");
     __publicField(this, "currentOffset", 0);
     __publicField(this, "wordBoundaryOffset", 0);
+    __publicField(this, "privTextOffset", 0);
     this.key = key;
     this.region = region;
     this.voice = voice;
@@ -8620,6 +8621,7 @@ class TextToSpeech {
     }
     this.player = void 0;
     this.highlightDiv = void 0;
+    this.privTextOffset = 0;
   }
   async startSynthesizer(node, attr) {
     this.speechConfig = SpeechConfig.fromSubscription(this.key, this.region);
@@ -8679,12 +8681,13 @@ class TextToSpeech {
           if (~[".", ",", "!", "?", "*", "(", ")", "&", "\\", "/", "^", "[", "]", "<", ">", ":"].indexOf(wordBoundary.text)) {
             wordBoundary = (_a = this.previousWordBoundary) != null ? _a : void 0;
           }
-          if (wordBoundary === void 0) {
+          if (wordBoundary === void 0 || this.privTextOffset > wordBoundary.privTextOffset) {
             this.highlightDiv.innerHTML = this.originalHighlightDivInnerHTML;
           } else {
             if (!this.wordEncounters[wordBoundary.text]) {
               this.wordEncounters[wordBoundary.text] = 0;
             }
+            this.privTextOffset = wordBoundary.privTextOffset;
             if (this.currentWord !== wordBoundary.text || this.wordBoundaryOffset !== wordBoundary.textOffset) {
               this.currentOffset = this.getPosition(
                 this.originalHighlightDivInnerHTML,
@@ -8716,7 +8719,11 @@ class TextToSpeech {
   getPosition(string, subString, lastOffset) {
     const regex = new RegExp(`(?:^|[^-\\w])(${subString})\\b`, "g");
     const offset = string.slice(lastOffset).search(regex);
-    return (offset <= 0 ? offset : offset + 1) + lastOffset;
+    let newOffset = offset <= 0 ? Number.MAX_SAFE_INTEGER : offset + 1;
+    if (newOffset !== Number.MAX_SAFE_INTEGER) {
+      newOffset += lastOffset;
+    }
+    return newOffset;
   }
   buildSSML(text) {
     return `<speak xmlns="http://www.w3.org/2001/10/synthesis" 
