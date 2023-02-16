@@ -34,15 +34,16 @@ export class TextToSpeech {
     currentWord: string = '';
     currentOffset: number = 0;
     wordBoundaryOffset: number = 0;
-    privTextOffset: number = 0;
+    prevTextOffset: number = 0;
+    url: string = '';
 
-
-    constructor(key: string, region: string, voice: string, rate: number = 0, pitch: number = 0) {
+    constructor(key: string, region: string, voice: string, rate: number = 0, pitch: number = 0, url: string = '') {
         this.key = key;
         this.region = region;
         this.voice = voice;
         this.rate = rate;
         this.pitch = pitch;
+        this.url = url;
     }
 
     async start() {
@@ -238,7 +239,7 @@ export class TextToSpeech {
         }
         this.player = undefined;
         this.highlightDiv = undefined;
-        this.privTextOffset = 0;
+        this.prevTextOffset = 0;
     }
 
     async startSynthesizer(node: any, attr: Attr) {
@@ -309,13 +310,13 @@ export class TextToSpeech {
                         wordBoundary = this.previousWordBoundary ?? undefined;
                     }
 
-                    if (wordBoundary === undefined || this.privTextOffset > wordBoundary.privTextOffset) {
+                    if (wordBoundary === undefined || this.prevTextOffset > wordBoundary.prevTextOffset) {
                         this.highlightDiv.innerHTML = this.originalHighlightDivInnerHTML;
                     } else {
                         if (!this.wordEncounters[wordBoundary.text]) {
                             this.wordEncounters[wordBoundary.text] = 0;
                         }
-                        this.privTextOffset = wordBoundary.privTextOffset;
+                        this.prevTextOffset = wordBoundary.prevTextOffset;
 
                         if (this.currentWord !== wordBoundary.text || this.wordBoundaryOffset !== wordBoundary.textOffset) {
                             this.currentOffset = this.getPosition(
@@ -358,16 +359,18 @@ export class TextToSpeech {
     }
 
     buildSSML(text: string) {
-        return `<speak xmlns="http://www.w3.org/2001/10/synthesis" 
+        let ssml = `<speak xmlns="http://www.w3.org/2001/10/synthesis" 
             xmlns:mstts="http://www.w3.org/2001/mstts" 
             xmlns:emo="http://www.w3.org/2009/10/emotionml" 
             version="1.0" 
             xml:lang="en-US">
-            <voice name="${this.voice}">
-                <prosody rate="${this.rate}%" pitch="${this.pitch}%">
-                ${text}
-                </prosody>
-            </voice>
-        </speak>`;
+            <voice name="${this.voice}">`;
+
+        if (this.url !== '') {
+            ssml += `<lexicon uri="${this.url}"/>`;
+        }
+
+        ssml += `<prosody rate="${this.rate}%" pitch="${this.pitch}%">${text}</prosody></voice></speak>`;
+        return ssml;
     }
 }

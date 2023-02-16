@@ -8428,7 +8428,7 @@ class SpeechToText {
   }
 }
 class TextToSpeech {
-  constructor(key, region, voice, rate = 0, pitch = 0) {
+  constructor(key, region, voice, rate = 0, pitch = 0, url = "") {
     __publicField(this, "key");
     __publicField(this, "region");
     __publicField(this, "voice");
@@ -8449,12 +8449,14 @@ class TextToSpeech {
     __publicField(this, "currentWord", "");
     __publicField(this, "currentOffset", 0);
     __publicField(this, "wordBoundaryOffset", 0);
-    __publicField(this, "privTextOffset", 0);
+    __publicField(this, "prevTextOffset", 0);
+    __publicField(this, "url", "");
     this.key = key;
     this.region = region;
     this.voice = voice;
     this.rate = rate;
     this.pitch = pitch;
+    this.url = url;
   }
   async start() {
     await this.registerBindings(document);
@@ -8621,7 +8623,7 @@ class TextToSpeech {
     }
     this.player = void 0;
     this.highlightDiv = void 0;
-    this.privTextOffset = 0;
+    this.prevTextOffset = 0;
   }
   async startSynthesizer(node, attr) {
     this.speechConfig = SpeechConfig.fromSubscription(this.key, this.region);
@@ -8681,13 +8683,13 @@ class TextToSpeech {
           if (~[".", ",", "!", "?", "*", "(", ")", "&", "\\", "/", "^", "[", "]", "<", ">", ":"].indexOf(wordBoundary.text)) {
             wordBoundary = (_a = this.previousWordBoundary) != null ? _a : void 0;
           }
-          if (wordBoundary === void 0 || this.privTextOffset > wordBoundary.privTextOffset) {
+          if (wordBoundary === void 0 || this.prevTextOffset > wordBoundary.prevTextOffset) {
             this.highlightDiv.innerHTML = this.originalHighlightDivInnerHTML;
           } else {
             if (!this.wordEncounters[wordBoundary.text]) {
               this.wordEncounters[wordBoundary.text] = 0;
             }
-            this.privTextOffset = wordBoundary.privTextOffset;
+            this.prevTextOffset = wordBoundary.prevTextOffset;
             if (this.currentWord !== wordBoundary.text || this.wordBoundaryOffset !== wordBoundary.textOffset) {
               this.currentOffset = this.getPosition(
                 this.originalHighlightDivInnerHTML,
@@ -8726,17 +8728,17 @@ class TextToSpeech {
     return newOffset;
   }
   buildSSML(text) {
-    return `<speak xmlns="http://www.w3.org/2001/10/synthesis" 
+    let ssml = `<speak xmlns="http://www.w3.org/2001/10/synthesis" 
             xmlns:mstts="http://www.w3.org/2001/mstts" 
             xmlns:emo="http://www.w3.org/2009/10/emotionml" 
             version="1.0" 
             xml:lang="en-US">
-            <voice name="${this.voice}">
-                <prosody rate="${this.rate}%" pitch="${this.pitch}%">
-                ${text}
-                </prosody>
-            </voice>
-        </speak>`;
+            <voice name="${this.voice}">`;
+    if (this.url !== "") {
+      ssml += `<lexicon uri="${this.url}"/>`;
+    }
+    ssml += `<prosody rate="${this.rate}%" pitch="${this.pitch}%">${text}</prosody></voice></speak>`;
+    return ssml;
   }
 }
 export { SpeechToText, TextToSpeech };
