@@ -24,4 +24,6 @@ File System access not available, please use Push or PullAudioOutputStream`),thi
             xmlns:emo="http://www.w3.org/2009/10/emotionml" 
             version="1.0" 
             xml:lang="en-US">
-            <voice name="${this.voice}">`;return this.url!==""&&(t+=`<lexicon uri="${this.url}"/>`),t+=`<prosody rate="${this.rate}%" pitch="${this.pitch}%">${e}</prosody></voice></speak>`,t}}_.SpeechToText=Nr,_.TextToSpeech=xr,Object.defineProperties(_,{__esModule:{value:!0},[Symbol.toStringTag]:{value:"Module"}})});
+            <voice name="${this.voice}">`;return this.url!==""&&(t+=`<lexicon uri="${this.url}"/>`),t+=`<prosody rate="${this.rate}%" pitch="${this.pitch}%">
+            ${this.convertHtmlEntities(e)}
+        </prosody></voice></speak>`,t}convertHtmlEntities(e){const t=document.createElement("p");return t.textContent=e,t.innerHTML}}_.SpeechToText=Nr,_.TextToSpeech=xr,Object.defineProperties(_,{__esModule:{value:!0},[Symbol.toStringTag]:{value:"Module"}})});

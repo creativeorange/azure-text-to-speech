@@ -8737,8 +8737,15 @@ class TextToSpeech {
     if (this.url !== "") {
       ssml += `<lexicon uri="${this.url}"/>`;
     }
-    ssml += `<prosody rate="${this.rate}%" pitch="${this.pitch}%">${text}</prosody></voice></speak>`;
+    ssml += `<prosody rate="${this.rate}%" pitch="${this.pitch}%">
+            ${this.convertHtmlEntities(text)}
+        </prosody></voice></speak>`;
     return ssml;
+  }
+  convertHtmlEntities(input) {
+    const p = document.createElement(`p`);
+    p.textContent = input;
+    return p.innerHTML;
   }
 }
 export { SpeechToText, TextToSpeech };

@@ -370,7 +370,16 @@ export class TextToSpeech {
             ssml += `<lexicon uri="${this.url}"/>`;
         }
 
-        ssml += `<prosody rate="${this.rate}%" pitch="${this.pitch}%">${text}</prosody></voice></speak>`;
+        ssml += `<prosody rate="${this.rate}%" pitch="${this.pitch}%">
+            ${this.convertHtmlEntities(text)}
+        </prosody></voice></speak>`;
         return ssml;
+    }
+
+    convertHtmlEntities(input: string) {
+        const p = document.createElement(`p`);
+        p.textContent = input;
+
+        return p.innerHTML;
     }
 }
