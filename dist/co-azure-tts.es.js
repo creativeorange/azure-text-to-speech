@@ -8392,20 +8392,25 @@ class SpeechToText {
       const audioConfig = AudioConfig.fromDefaultMicrophoneInput();
       this.recognizer = new TranslationRecognizer(speechConfig, audioConfig);
       document.dispatchEvent(new CustomEvent("COAzureSTTStartedRecording", {}));
-      this.recognizer.recognizeOnceAsync(
-        (result) => {
-          if (result.reason === ResultReason.TranslatedSpeech) {
-            const translation = result.translations.get(this.targetLanguage);
-            const inputElement = document.getElementById(attr.value);
-            if (inputElement !== null) {
-              if (inputElement instanceof HTMLInputElement) {
-                inputElement.value += `${translation} `;
-              } else {
-                inputElement.innerHTML += `${translation} `;
-              }
+      const prevResults = [];
+      this.recognizer.recognizing = (sender, event) => {
+        const result = event.result;
+        if (result && result.reason === ResultReason.TranslatingSpeech) {
+          const translation = result.translations.get(this.targetLanguage);
+          prevResults["result_" + result.privOffset.toString()] = translation;
+          const totalResult = Object.values(prevResults).join(". ");
+          const inputElement = document.getElementById(attr.value);
+          if (inputElement !== null) {
+            if (inputElement instanceof HTMLInputElement) {
+              inputElement.value = `${totalResult} `;
+            } else {
+              inputElement.innerHTML = `${totalResult} `;
             }
           }
-          this.stop();
+        }
+      };
+      this.recognizer.startContinuousRecognitionAsync(
+        (result) => {
         },
         (err) => {
           console.log(err);
@@ -8421,6 +8426,7 @@ class SpeechToText {
   }
   async stop() {
     if (this.recognizer !== void 0) {
+      this.recognizer.stopContinuousRecognitionAsync();
       this.recognizer.close();
       this.recognizer = void 0;
     }
